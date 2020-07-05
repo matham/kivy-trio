@@ -1,6 +1,84 @@
-"""Async Trio callbacks from Kivy
-=================================
+"""Async coroutines in Trio from Kivy
+=====================================
 
+:func:`kivy_run_in_async` is a kivy decorator that allows executing an async
+coroutine in the trio context. E.g. after the trio and kivy
+:mod:`kivy_trio.context` is initialized, the following async function:
+
+.. code-block:: python
+
+    async def send_device_message(delay, device, message):
+        await trio.sleep(delay)
+        return await device.send(message)
+
+can be scheduled to run from within a kivy context as follows:
+
+.. code-block:: python
+
+    @kivy_run_in_async
+    def kivy_send_message(message):
+        dev = MyDevice()
+        response = yield mark(send_device_message, delay, dev, message=message)
+        print(f'Device responded with {response}')
+
+Subsequently, from Kivy we can call ``event = kivy_send_message('hello')``
+and this will suspend the function at the ``yield`` statement and schedule
+``send_device_message`` to be called and waited on in
+trio with the given parameters. When the coroutine returns in trio, the result
+of the coroutine will automatically be sent to resume the generator, the
+``yield`` statement will return the result and the ``kivy_send_message``
+function will finish executing.
+
+Exceptions
+----------
+
+If the async coroutine raises an exception, the exception will be caught and
+sent to resume the generator at the yield statement so the generator will
+raise that exception. So e.g.:
+
+.. code-block:: python
+
+    async def raise_error():
+        raise ValueError()
+
+    @kivy_run_in_async
+    def kivy_send_message():
+        try:
+            response = yield mark(raise_error)
+        except ValueError:
+            print('Error caught')
+
+when ``kivy_send_message`` is called, it'll catch the exception raised in trio
+and print ``'Error caught'``.
+
+Lifecycle and Cancellation
+--------------------------
+
+A :func:`kivy_run_in_async` decorated function or method may only be called
+while the Kivy event loop and trio event loop are running. Otherwise, an
+exception will be raised when the function is called.
+
+If the kivy event loop ends while the coroutine is executing in trio, the event
+will be canceled and a :class:`KivyEventCancelled` exception will be raised
+into the generator. The coroutine will still finish executing in trio, but the
+result will be discarded when it's done.
+
+An waiting event may be explicitly canceled with
+:meth:`KivyCallbackEvent.cancel`. As above a :class:`KivyEventCancelled`
+exception will be raised into the generator and the coroutine will still finish
+executing in trio, but its result will be discarded.
+
+Threading
+---------
+
+A :func:`kivy_run_in_async` decorated function is only safe to be called from
+the kivy thread, and only if the :mod:`kivy_trio.context` was properly
+initialized. The coroutine will be executed in the trio context that it was
+initialized to.
+
+But the context can be initialized to a trio event loop running in the
+same or in a different thread than kivy with identical behavior for
+:func:`kivy_run_in_async`.
 """
 import trio
 import outcome
@@ -18,10 +96,20 @@ __all__ = (
 
 
 class KivyEventCancelled(BaseException):
+    """The exception injected into the waiting :func:`kivy_run_in_async`
+    decorated generator when the event is canceled.
+    """
     pass
 
 
 def mark(__func, *args, **kwargs):
+    """Collects the function and its parameters to be used by
+    :func:`kivy_run_in_async` as needed.
+
+    :param __func: The function or method object.
+    :param args: Any positional arguments.
+    :param kwargs: Any keyword arguments.
+    """
     return __func, args, kwargs
 
 
@@ -34,25 +122,30 @@ def _do_nothing(*args):
 
 
 class KivyCallbackEvent:
+    """The event class returned when a :func:`kivy_run_in_async` decorated
+    generator is called.
 
-    __slots__ = 'gen', 'clock', 'orig_func', 'clock_event'
+    This class should not be instantiated manually in user code.
+    """
 
-    gen: Optional[Generator]
+    __slots__ = '_gen', '_clock', '_orig_func', '_clock_event'
 
-    clock: ClockBase
+    _gen: Optional[Generator]
 
-    orig_func: Callable
+    _clock: ClockBase
 
-    clock_event: Optional[ClockEvent]
+    _orig_func: Callable
+
+    _clock_event: Optional[ClockEvent]
 
     def __init__(self, clock: ClockBase, func, gen, ret_func):
         super().__init__()
-        self.clock = clock
-        self.orig_func = func
+        self._clock = clock
+        self._orig_func = func
 
         # if kivy stops before we finished processing gen, cancel it
-        self.gen = gen
-        event = self.clock_event = clock.create_lifecycle_aware_trigger(
+        self._gen = gen
+        event = self._clock_event = clock.create_lifecycle_aware_trigger(
             _callback_raise_exception, self._cancel, timeout=math.inf,
             release_ref=False)
 
@@ -78,22 +171,30 @@ class KivyCallbackEvent:
             self._cancel(e=e)
 
     def cancel(self, *args):
-        """Only safe from kivy thread.
+        """Cancels the waiting event.
+
+        Raises a :class:`KivyEventCancelled` exception into the generator.
+        The coroutine will still finish executing in trio if it's not finished,
+        but its result will be discarded.
+
+        .. warning::
+
+            Only safe to be called from the kivy thread.
         """
         self._cancel(suppress_cancel=True)
 
     def _cancel(self, *args, e=None, suppress_cancel=False):
-        if self.gen is None:
+        if self._gen is None:
             return
 
         if e is None:
             e = KivyEventCancelled
 
-        self.clock_event.cancel()
-        self.clock_event = None
+        self._clock_event.cancel()
+        self._clock_event = None
 
         try:
-            self.gen.throw(e)
+            self._gen.throw(e)
         except StopIteration:
             # generator is done
             pass
@@ -103,13 +204,13 @@ class KivyCallbackEvent:
                 raise
         finally:
             # can't cancel again
-            self.gen = None
+            self._gen = None
 
     def _spawn_task(self, ret_func):
         try:
             trio.lowlevel.spawn_system_task(self._async_callback, *ret_func)
         except BaseException as e:
-            event = self.clock.create_lifecycle_aware_trigger(
+            event = self._clock.create_lifecycle_aware_trigger(
                 partial(self._cancel, e=e), _do_nothing, release_ref=False)
             try:
                 event()
@@ -118,26 +219,26 @@ class KivyCallbackEvent:
 
     def _kivy_callback(self, result, *args):
         # check if canceled
-        if self.gen is None:
+        if self._gen is None:
             return
 
         try:
-            result.send(self.gen)
+            result.send(self._gen)
         except StopIteration:
             pass
         else:
             raise RuntimeError(
-                f'{self.orig_func} does not return after the first yield. '
+                f'{self._orig_func} does not return after the first yield. '
                 f'Does it maybe have more than one yield? Only one yield '
                 f'statement is supported')
         finally:
-            self.clock_event.cancel()
-            self.clock_event = None
-            self.gen = None
+            self._clock_event.cancel()
+            self._clock_event = None
+            self._gen = None
 
     async def _async_callback(self, ret_func, ret_args=(), ret_kwargs=None):
         # check if canceled
-        if self.gen is None:
+        if self._gen is None:
             return
 
         if iscoroutinefunction(ret_func):
@@ -152,10 +253,10 @@ class KivyCallbackEvent:
             result = outcome.capture(ret_func, *ret_args, **(ret_kwargs or {}))
 
         # check if canceled
-        if self.gen is None:
+        if self._gen is None:
             return
 
-        event = self.clock.create_lifecycle_aware_trigger(
+        event = self._clock.create_lifecycle_aware_trigger(
             partial(self._kivy_callback, result), _do_nothing,
             release_ref=False)
         try:
@@ -165,7 +266,11 @@ class KivyCallbackEvent:
 
 
 def kivy_run_in_async(func):
-    """May be raised from other threads.
+    """Decorator that takes a generator that yields an async coroutine,
+    schedules it in trio, and sends the result or exception as the return value
+    of the ``yield`` statement in the generator.
+
+    See :mod:`kivy_trio.to_trio` for details.
     """
     @wraps(func)
     def run_to_yield(*args, **kwargs):
