@@ -412,10 +412,10 @@ class AsyncKivyBind(AsyncKivyEventQueue):
     (for events) or two element (for properties, instance and value) list.
 
     :Parameters:
-        `bound_obj`: :class:`EventDispatcher`
+        `obj`: :class:`EventDispatcher`
             The :class:`EventDispatcher` instance that contains the property
             or event being observed.
-        `bound_name`: str
+        `name`: str
             The property or event name to observe.
         `current`: bool
             Whether the iterator should return the current value on its
@@ -424,48 +424,48 @@ class AsyncKivyBind(AsyncKivyEventQueue):
             Only if it's a property and not an event.
     E.g.::
         async for x, y in AsyncBindQueue(
-            bound_obj=widget, bound_name='size', convert=lambda x: x[1]):
+            obj=widget, name='size', convert=lambda x: x[1]):
             print(value)
     Or::
         async for touch in AsyncBindQueue(
-            bound_obj=widget, bound_name='on_touch_down',
+            obj=widget, name='on_touch_down',
             convert=lambda x: x[0]):
             print(value)
     """
 
-    bound_obj = None
+    obj = None
 
-    bound_name = ''
+    name = ''
 
     bound_uid = 0
 
     current = True
 
-    def __init__(self, bound_obj, bound_name, current=True, **kwargs):
+    def __init__(self, obj, name, current=True, **kwargs):
         super().__init__(**kwargs)
-        self.bound_name = bound_name
-        self.bound_obj = bound_obj
+        self.name = name
+        self.obj = obj
         self.current = current
 
     def start_data_stream(self):
         super().start_data_stream()
 
-        bound_obj = self.bound_obj
-        bound_name = self.bound_name
+        obj = self.obj
+        name = self.name
 
-        uid = self.bound_uid = bound_obj.fbind(bound_name, self.add_item)
+        uid = self.bound_uid = obj.fbind(name, self.add_item)
         if not uid:
             raise ValueError(
                 '{} is not a recognized property or event of {}'
-                ''.format(bound_name, bound_obj))
+                ''.format(name, obj))
 
-        if self.current and not bound_obj.is_event_type(bound_name):
-            self.add_item(bound_obj, getattr(bound_obj, bound_name))
+        if self.current and not obj.is_event_type(name):
+            self.add_item(obj, getattr(obj, name))
 
     def stop_data_stream(self):
         super().stop_data_stream()
 
         if self.bound_uid:
-            self.bound_obj.unbind_uid(self.bound_name, self.bound_uid)
+            self.obj.unbind_uid(self.name, self.bound_uid)
             self.bound_uid = 0
-            self.bound_obj = None
+            self.obj = None

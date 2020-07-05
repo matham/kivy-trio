@@ -4,20 +4,19 @@
 """
 
 from trio.lowlevel import TrioToken, current_trio_token
-from functools import wraps, partial
 from contextvars import ContextVar
 from contextlib import contextmanager
 from typing import Optional
-import time
-from queue import Queue, Empty
 
 from kivy.clock import ClockBase
 
 __all__ = (
-    'get_thread_context_managers', 'trio_context_manager',
-    'kivy_context_manager', 'ContextVarContextManager',
-    'TrioTokenContextManager', 'KivyClockContextManager', 'kivy_clock',
-    'kivy_thread', 'trio_entry', 'trio_thread'
+    'trio_context_manager', 'kivy_context_manager',
+    'initialize_kivy_from_trio', 'kivy_trio_context_manager',
+    'ContextVarContextManager', 'TrioTokenContextManager',
+    'KivyClockContextManager', 'initialize_kivy_thread',
+    'initialize_trio_thread', 'kivy_clock', 'kivy_thread', 'trio_entry',
+    'trio_thread'
 )
 
 
@@ -64,48 +63,64 @@ trio_thread: ContextVar[Optional[TrioToken]] = ContextVar(
     'trio_thread', default=None)
 
 
-@contextmanager
-def trio_context_manager(clock, queue):
+async def initialize_kivy_from_trio(clock: ClockBase = None):
+    from kivy_trio.to_kivy import async_run_in_kivy
+    if clock is None:
+        from kivy.clock import Clock
+        clock = Clock
+
     token = current_trio_token()
-    queue.put(token)
 
-    with KivyClockContextManager(clock):
-        with ContextVarContextManager(trio_thread, token):
-            yield
+    await async_run_in_kivy(initialize_kivy_thread)(token, clock)
+
+
+def initialize_trio_thread(clock: ClockBase, token: TrioToken = None):
+    if token is None:
+        token = current_trio_token()
+    kivy_clock.set(clock)
+    trio_thread.set(token)
+    trio_entry.set(token)
+
+
+def initialize_kivy_thread(token: TrioToken, clock: ClockBase = None):
+    if clock is None:
+        from kivy.clock import Clock
+        clock = Clock
+
+    trio_entry.set(token)
+    kivy_thread.set(clock)
+    kivy_clock.set(clock)
 
 
 @contextmanager
-def kivy_context_manager(clock, queue):
-    ts = time.perf_counter()
-    res = None
-    while time.perf_counter() - ts < 1:
-        try:
-            res = queue.get(block=True, timeout=.1)
-        except Empty:
-            pass
-        else:
-            break
+def trio_context_manager(clock: ClockBase = None):
+    if clock is None:
+        from kivy.clock import Clock
+        clock = Clock
 
-    if res is None:
-        raise TimeoutError(
-            "Timed out waiting for trio thread to initialize. If there's only "
-            "on thread, did you enter kivy_context_manager before "
-            "trio_context_manager? With multiple threads, the trio thread "
-            "should be started before entering kivy_context_manager to "
-            "prevent deadlock of the kivy thread")
-
-    with TrioTokenContextManager(res):
-        with ContextVarContextManager(kivy_thread, clock):
-            yield
+    token = current_trio_token()
+    with KivyClockContextManager(clock):
+        with TrioTokenContextManager(token):
+            with ContextVarContextManager(trio_thread, token):
+                yield
 
 
-def get_thread_context_managers():
-    """Gets the context managers required to run kivy and trio threads.
-
-    :return: tuple of kivy_context_manager, trio_context_manager
-    """
+@contextmanager
+def kivy_context_manager(token: TrioToken):
     from kivy.clock import Clock
-    queue = Queue(maxsize=1)
+    with TrioTokenContextManager(token):
+        with KivyClockContextManager(Clock):
+            with ContextVarContextManager(kivy_thread, Clock):
+                yield
 
-    return partial(kivy_context_manager, Clock, queue), \
-        partial(trio_context_manager, Clock, queue)
+
+@contextmanager
+def kivy_trio_context_manager():
+    from kivy.clock import Clock
+    token = current_trio_token()
+
+    with KivyClockContextManager(Clock):
+        with ContextVarContextManager(trio_thread, token):
+            with TrioTokenContextManager(token):
+                with ContextVarContextManager(kivy_thread, Clock):
+                    yield

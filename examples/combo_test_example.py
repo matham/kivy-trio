@@ -4,12 +4,14 @@ from threading import Thread
 
 from kivy.app import App
 from kivy.lang import Builder
+from kivy.clock import Clock
 from kivy.properties import NumericProperty, StringProperty, BooleanProperty
 
 from kivy_trio.to_kivy import async_run_in_kivy, EventLoopStoppedError, \
     AsyncKivyBind
 from kivy_trio.to_trio import kivy_run_in_async, mark, KivyEventCancelled
-from kivy_trio.context import get_thread_context_managers
+from kivy_trio.context import kivy_trio_context_manager, \
+    trio_context_manager, initialize_kivy_from_trio
 
 kv = '''
 BoxLayout:
@@ -43,7 +45,7 @@ BoxLayout:
             id: press_btn
             text: 'Press me'
         Label:
-            text: 'Pressing: {}'.format(app.pressing_button)
+            text: 'Trio says: button is {}'.format(app.pressing_button)
 '''
 
 
@@ -121,14 +123,14 @@ class DemoApp(App):
             # wait for app to be set up
             await trio.sleep(.1)
 
-        async with AsyncKivyBind(
-                bound_obj=self.press_btn, bound_name='state') as queue:
+        async with AsyncKivyBind(obj=self.press_btn, name='state') as queue:
             async for value in queue:
-                await self.set_button_state(value[1] == 'down')
+                await self.set_button_state(value[1])
 
-    def _trio_thread_target(self, trio_context_manager):
+    def _trio_thread_target(self):
         async def runner():
             with trio_context_manager():
+                await initialize_kivy_from_trio()
                 async with trio.open_nursery() as nursery:
                     nursery.start_soon(self.send_msg_to_kivy_from_trio)
                     nursery.start_soon(self.track_press_button)
@@ -136,28 +138,20 @@ class DemoApp(App):
         trio.run(runner)
 
     def run_threading(self):
-        kivy_context_manager, trio_context_manager = \
-            get_thread_context_managers()
+        thread = Thread(target=self._trio_thread_target)
+        # start the trio thread once kivy's widgets are set up and ready
+        Clock.schedule_once(lambda x: thread.start())
 
-        thread = Thread(
-            target=self._trio_thread_target, args=(trio_context_manager, ))
-        thread.start()
-
-        with kivy_context_manager():
-            self.run()
-
+        self.run()
+        # wait until trio thread is done
         thread.join()
 
     async def run_app(self):
-        kivy_context_manager, trio_context_manager = \
-            get_thread_context_managers()
-
-        with trio_context_manager():
-            with kivy_context_manager():
-                async with trio.open_nursery() as nursery:
-                    nursery.start_soon(self.async_run, 'trio')
-                    nursery.start_soon(self.send_msg_to_kivy_from_trio)
-                    nursery.start_soon(self.track_press_button)
+        with kivy_trio_context_manager():
+            async with trio.open_nursery() as nursery:
+                nursery.start_soon(self.async_run, 'trio')
+                nursery.start_soon(self.send_msg_to_kivy_from_trio)
+                nursery.start_soon(self.track_press_button)
 
 
 if __name__ == '__main__':
