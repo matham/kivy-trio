@@ -4,15 +4,16 @@
 """
 
 from trio.lowlevel import TrioToken, current_trio_token
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from contextlib import contextmanager
-from typing import Optional
+from typing import Optional, Any
 
 from kivy.clock import ClockBase
 
 __all__ = (
     'trio_context_manager', 'kivy_context_manager',
     'initialize_kivy_from_trio', 'kivy_trio_context_manager',
+    'ContextVarContextManagerBase',
     'ContextVarContextManager', 'TrioTokenContextManager',
     'KivyClockContextManager', 'initialize_kivy_thread',
     'initialize_trio_thread', 'kivy_clock', 'kivy_thread', 'trio_entry',

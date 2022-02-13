@@ -38,6 +38,7 @@ extensions = [
 intersphinx_mapping = {
     'kivy': ('https://kivy.org/doc/stable/', None),
     'trio': ('https://trio.readthedocs.io/en/stable/', None),
+    'python': ('https://docs.python.org/', None)
 }
 
 # Add any paths that contain templates here, relative to this directory.
