@@ -3,6 +3,7 @@
 
 """
 import trio
+from trio.lowlevel import current_trio_token, TrioToken
 import outcome
 import math
 from functools import wraps, partial
@@ -10,7 +11,7 @@ from typing import Optional, Callable
 from collections import deque
 from asyncio import iscoroutinefunction
 
-from kivy.clock import ClockBase, ClockNotRunningError, ClockEvent
+from kivy.clock import ClockBase, ClockNotRunningError, ClockEvent, Clock
 
 from kivy_trio.context import kivy_clock, kivy_thread, trio_entry, trio_thread
 
@@ -20,6 +21,9 @@ __all__ = (
 
 
 class EventLoopStoppedError(Exception):
+    """Exception raised in trio when it is waiting to run something in Kivy,
+    but the Kivy app already finished or finished while waiting.
+    """
     pass
 
 
@@ -41,13 +45,26 @@ def _report_kivy_back_in_trio_thread_fn(task_container, task):
     trio.lowlevel.reschedule(task, task_container[1])
 
 
-def async_run_in_kivy(func=None):
+def async_run_in_kivy(func=None, clock: Optional[ClockBase] = None):
+    """Decorator that runs the given function in a Kivy context in an
+    asynchronous manner, waiting (asynchronously) until it's done.
+
+    If Kivy is running in a different thread (or if we're unsure which thread
+    is running currently) it will schedule the function to be called using the
+    Kivy Clock in the Kivy thread, otherwise it may call the function directly.
+
+    :param func: The function to be called in the Kivy context.
+    :param clock: The clock to use to schedule the function, if needed.
+        Defaults to ``kivy.clock.Clock`` if not provided and
+        :attr:`kivy_trio.context.kivy_clock` is not set, otherwise one of them
+        is used in that order.
+    """
     # if it's canceled in the async side, it either succeeds if we cancel on
     # kivy side or waits until kivy calls us back. If Kivy stops early it still
     # processes the callback so it's fine. So it either raises a
     # EventLoopStoppedError immediately or fails
     if func is None:
-        return partial(async_run_in_kivy)
+        return partial(async_run_in_kivy, clock=clock)
 
     if iscoroutinefunction(func):
         raise ValueError(
@@ -59,15 +76,11 @@ def async_run_in_kivy(func=None):
     async def inner_func(*args, **kwargs):
         """When canceled, executed work is discarded. Thread safe.
         """
-        try:
-            clock: ClockBase = kivy_clock.get()
-            kivy_thread_clock: ClockBase = kivy_thread.get()
-        except LookupError as e:
-            raise LookupError(
-                "Cannot schedule kivy callback because no running kivy "
-                "event loop found. Have you forgotten to initialize "
-                "kivy_clock or kivy_thread?"
-            ) from e
+        nonlocal clock
+        if clock is None:
+            clock = kivy_clock.get(Clock)
+        # kivy_thread defaults to None
+        kivy_thread_clock: ClockBase = kivy_thread.get()
         lock = {}
 
         if kivy_thread_clock is clock:
@@ -176,9 +189,6 @@ class AsyncKivyEventQueue:
             If None, the callback queue may grow to an arbitrary length.
             Otherwise, it is bounded to maxlen. Once it's full, when new items
             are added a corresponding number of oldest items are discarded.
-        `thread_fn`: callable or None
-            If reading from the queue is done with a different thread than
-            writing it, this is the callback that schedules in the read thread.
     """
 
     _quit: bool = False
@@ -199,6 +209,10 @@ class AsyncKivyEventQueue:
 
     _eof_trio_event: Optional[trio.Event] = None
 
+    _trio_token: Optional[TrioToken] = None
+
+    _trio_thread_token: Optional[TrioToken] = None
+
     def __init__(
             self, filter_fn: Optional[Callable] = None,
             convert: Optional[Callable] = None, max_len: Optional[int] = None,
@@ -213,13 +227,31 @@ class AsyncKivyEventQueue:
             raise TypeError('Cannot re-enter because it was not properly '
                             'cleaned up on the last exit')
 
+        try:
+            entry_token = trio_entry.get(None)
+            # trio_thread defaults to None
+            thread_token = trio_thread.get()
+            if entry_token is None:
+                entry_token = current_trio_token()
+        except RuntimeError as e:
+            if self.queue is None:
+                return
+            # if there is a queue, meaning it's in the with block, but we can't
+            # find the token, then the user didn't set it
+            raise LookupError(
+                "Cannot enter because no running trio event loop found. "
+                "Have you forgotten to initialize trio_entry with your event "
+                "loop token?") from e
+
+        self._trio_token = entry_token
+        self._trio_thread_token = thread_token
         self.queue = deque(maxlen=self._max_len)
         self.send_channel, self.receive_channel = trio.open_memory_channel(1)
         self._eof_trio_event = trio.Event()
         self._quit = False
 
         try:
-            await async_run_in_kivy(self.start_data_stream)()
+            await async_run_in_kivy(self._start_data_stream)()
         except BaseException:
             self._eof_trio_event = None
             raise
@@ -229,7 +261,7 @@ class AsyncKivyEventQueue:
         self._quit = True
         self.send_channel = self.receive_channel = None
         try:
-            await async_run_in_kivy(self.stop_data_stream)()
+            await async_run_in_kivy(self._stop_data_stream)()
         except EventLoopStoppedError:
             # if kivy ended, then it must have called _clock_ended_callback,
             # which would have called stop_data_stream already or in the future
@@ -238,6 +270,8 @@ class AsyncKivyEventQueue:
                 await self._eof_trio_event.wait()
         self.queue = None  # this lets us detect if stop raised an error
         self._eof_trio_event = None
+        self._trio_token = None
+        self._trio_thread_token = None
 
     def __aiter__(self):
         return self
@@ -266,20 +300,8 @@ class AsyncKivyEventQueue:
             return
         self._quit = True
 
-        try:
-            entry_token = trio_entry.get()
-            thread_token = trio_thread.get()
-        except LookupError as e:
-            if self.queue is None:
-                return
-            # if there is a queue, meaning it's in the with block, but we can't
-            # find the token, then the user didn't set it
-            raise LookupError(
-                "Cannot stop because no running trio event loop found. "
-                "Have you forgotten to initialize "
-                "trio_entry or trio_thread?") from e
-
-        if thread_token is entry_token:
+        entry_token = self._trio_token
+        if self._trio_thread_token is entry_token:
             # same thread
             self._send_on_channel()
         else:
@@ -311,22 +333,8 @@ class AsyncKivyEventQueue:
             return
         queue.append(args)
 
-        try:
-            entry_token = trio_entry.get()
-            thread_token = trio_thread.get()
-        except LookupError as e:
-            # we had a queue, which implies trio was present a moment ago, but
-            # now we can't find a token. So if the queue is gone, move on. But
-            # if the queue is still there the token was never there so we
-            # should raise an error
-            if self.queue is None:
-                return
-            raise LookupError(
-                "Cannot add item because no running trio event loop found. "
-                "Have you forgotten to initialize trio_entry or trio_thread?"
-            ) from e
-
-        if thread_token is entry_token:
+        entry_token = self._trio_token
+        if self._trio_thread_token is entry_token:
             # same thread
             self._send_on_channel()
         else:
@@ -352,22 +360,14 @@ class AsyncKivyEventQueue:
         self.stop()
         # we also have to call stop_data_stream because the trio thread won't be
         # able to call it because it'll raise a EventLoopStoppedError
-        self.stop_data_stream()
+        self._stop_data_stream()
 
         event = self._eof_trio_event
         if event is None:
             return
 
-        try:
-            entry_token = trio_entry.get()
-            thread_token = trio_thread.get()
-        except LookupError as e:
-            raise LookupError(
-                "Cannot stop because no running trio event loop found. "
-                "Have you forgotten to initialize "
-                "trio_entry or trio_thread?") from e
-
-        if thread_token is entry_token:
+        entry_token = self._trio_token
+        if self._trio_thread_token is entry_token:
             # same thread
             event.set()
         else:
@@ -377,22 +377,15 @@ class AsyncKivyEventQueue:
                 # nothing to signal - it's done
                 pass
 
-    def start_data_stream(self):
-        try:
-            clock: ClockBase = kivy_clock.get()
-        except LookupError as e:
-            raise LookupError(
-                "Cannot schedule kivy callback because no running kivy "
-                "event loop found. Have you forgotten to initialize "
-                "kivy_clock or kivy_thread?"
-            ) from e
+    def _start_data_stream(self):
+        clock: ClockBase = kivy_clock.get(Clock)
 
         event = self._eof_event = clock.create_lifecycle_aware_trigger(
             _do_nothing, self._clock_ended_callback, timeout=math.inf,
             release_ref=False)
         event()
 
-    def stop_data_stream(self):
+    def _stop_data_stream(self):
         """May be called multiple times.
         """
         if self._eof_event is not None:
@@ -447,8 +440,8 @@ class AsyncKivyBind(AsyncKivyEventQueue):
         self.obj = obj
         self.current = current
 
-    def start_data_stream(self):
-        super().start_data_stream()
+    def _start_data_stream(self):
+        super()._start_data_stream()
 
         obj = self.obj
         name = self.name
@@ -462,8 +455,8 @@ class AsyncKivyBind(AsyncKivyEventQueue):
         if self.current and not obj.is_event_type(name):
             self.add_item(obj, getattr(obj, name))
 
-    def stop_data_stream(self):
-        super().stop_data_stream()
+    def _stop_data_stream(self):
+        super()._stop_data_stream()
 
         if self.bound_uid:
             self.obj.unbind_uid(self.name, self.bound_uid)

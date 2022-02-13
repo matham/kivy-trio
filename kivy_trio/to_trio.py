@@ -81,6 +81,7 @@ same or in a different thread than kivy with identical behavior for
 :func:`kivy_run_in_async`.
 """
 import trio
+from trio.lowlevel import current_trio_token
 import outcome
 import math
 from functools import wraps, partial
@@ -92,7 +93,8 @@ from kivy.clock import ClockBase, ClockNotRunningError, ClockEvent
 from kivy_trio.context import trio_entry, trio_thread
 
 __all__ = (
-    'KivyEventCancelled', 'mark', 'kivy_run_in_async', 'KivyCallbackEvent')
+    'KivyEventCancelled', 'mark', 'kivy_run_in_async',
+    'kivy_run_in_async_quiet', 'KivyCallbackEvent')
 
 
 class KivyEventCancelled(BaseException):
@@ -153,14 +155,16 @@ class KivyCallbackEvent:
             event()
 
             try:
-                entry_token = trio_entry.get()
+                entry_token = trio_entry.get(None)
+                # trio_thread defaults to None
                 thread_token = trio_thread.get()
-            except LookupError as e:
+                if entry_token is None:
+                    entry_token = current_trio_token()
+            except RuntimeError as e:
                 raise LookupError(
-                    "Cannot schedule trio callback because no running trio "
-                    "event loop found. Have you forgotten to initialize "
-                    "trio_entry or trio_thread?"
-                ) from e
+                    "Cannot enter because no running trio event loop found. "
+                    "Have you forgotten to initialize trio_entry with your "
+                    "event loop token?") from e
 
             if thread_token is entry_token:
                 trio.lowlevel.spawn_system_task(
@@ -265,23 +269,45 @@ class KivyCallbackEvent:
             pass
 
 
-def kivy_run_in_async(func):
+def kivy_run_in_async(gen):
     """Decorator that takes a generator that yields an async coroutine,
     schedules it in trio, and sends the result or exception as the return value
     of the ``yield`` statement in the generator.
 
     See :mod:`kivy_trio.to_trio` for details.
     """
-    @wraps(func)
+    @wraps(gen)
     def run_to_yield(*args, **kwargs):
         from kivy.clock import Clock
 
-        gen = func(*args, **kwargs)
+        gen_inst = gen(*args, **kwargs)
         try:
-            ret_func = next(gen)
+            ret_func = next(gen_inst)
         except StopIteration:
             return None
 
-        return KivyCallbackEvent(Clock, func, gen, ret_func)
+        return KivyCallbackEvent(Clock, gen, gen_inst, ret_func)
+
+    return run_to_yield
+
+
+def kivy_run_in_async_quiet(async_func):
+    """Decorator that takes a generator that yields an async coroutine,
+    schedules it in trio, and sends the result or exception as the return value
+    of the ``yield`` statement in the generator.
+
+    See :mod:`kivy_trio.to_trio` for details.
+    """
+    @wraps(async_func)
+    def run_to_yield(*args, **kwargs):
+        from kivy.clock import Clock
+
+        def gen():
+            yield mark(async_func, *args, **kwargs)
+
+        gen_inst = gen()
+        ret_func = next(gen_inst)
+
+        return KivyCallbackEvent(Clock, async_func, gen_inst, ret_func)
 
     return run_to_yield
