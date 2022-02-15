@@ -68,6 +68,9 @@ class ContextVarContextManager:
 kivy_clock: ContextVar[ClockBase] = ContextVar('kivy_clock')
 """A :attr:`~contextvars.ContextVar` that contains the :attr:`~kivy.clock.Clock`
 :mod:`kivy_trio` uses to call into kivy to execute callbacks.
+
+It will typically default to :attr:`~kivy.clock.Clock` in functions that need a
+kivy clock when it has not been initialized.
 """
 kivy_thread: ContextVar[Optional[ClockBase]] = ContextVar(
     'kivy_thread', default=None)

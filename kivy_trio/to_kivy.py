@@ -12,6 +12,7 @@ from collections import deque
 from asyncio import iscoroutinefunction
 
 from kivy.clock import ClockBase, ClockNotRunningError, ClockEvent, Clock
+from kivy.event import EventDispatcher
 
 from kivy_trio.context import kivy_clock, kivy_thread, trio_entry, trio_thread
 
@@ -49,15 +50,37 @@ def async_run_in_kivy(func=None, clock: Optional[ClockBase] = None):
     """Decorator that runs the given function in a Kivy context in an
     asynchronous manner, waiting (asynchronously) until it's done.
 
-    If Kivy is running in a different thread (or if we're unsure which thread
-    is running currently) it will schedule the function to be called using the
-    Kivy Clock in the Kivy thread, otherwise it may call the function directly.
+    It is primarily useful when kivy and trio are running in different threads.
+    See :mod:`kivy_trio.context` and the note below for how to initialize
+    kivy/trio so it knows the kivy/trio event loop it runs within.
 
-    :param func: The function to be called in the Kivy context.
-    :param clock: The clock to use to schedule the function, if needed.
-        Defaults to ``kivy.clock.Clock`` if not provided and
-        :attr:`kivy_trio.context.kivy_clock` is not set, otherwise one of them
-        is used in that order.
+    :param func: The synchronous function to be called in the Kivy event loop.
+    :param clock: The kivy :attr:`~kivy.clock.Clock` to use to schedule the
+        function, if needed. Defaults to :attr:`~kivy.clock.Clock` if not
+        provided and :attr:`kivy_trio.context.kivy_clock` is not set, otherwise
+        one of them is used in that order.
+
+    E.g.:
+
+    .. code-block:: python
+
+        >>> @async_run_in_kivy
+        ... def set_button_state(state):
+        ...     kivy_button.pressing_button = state
+        >>> # set the button down from trio
+        >>> await set_button_state('down')
+        >>> await trio.sleep(5)
+        >>> # reset the button back from trio
+        >>> await set_button_state('normal')
+
+    .. note::
+
+        If Kivy is running in a different thread (or if we're unsure which
+        thread is running currently) it will schedule the function to be called
+        using the Kivy Clock in the Kivy thread in the next clock frame,
+        otherwise, if we know it's running in the same thread (e.g. because
+        :func:`~kivy_trio.context.initialize_shared_thread`) was used, it may
+        call the function directly.
     """
     # if it's canceled in the async side, it either succeeds if we cancel on
     # kivy side or waits until kivy calls us back. If Kivy stops early it still
@@ -166,42 +189,99 @@ def async_run_in_kivy(func=None, clock: Optional[ClockBase] = None):
 
 class AsyncKivyEventQueue:
     """A class for asynchronously iterating values in a queue and waiting
-    for the queue to be updated with new values through a callback function.
+    for the queue to be updated with new values from a synchronous method
+    :meth:`add_item`.
 
-    An instance is an async iterator which for every iteration waits for
-    callbacks to add values to the queue and then returns it.
-
-    :meth:`stop` is called automatically if kivy's event loop exits while
-    it's in the with block.
+    An instance is an async iterator which for every iteration asynchronously
+    waits for :meth:`add_item` to add values to the queue and then yields it.
 
     :Parameters:
 
         `filter`: callable or None
-            A callable that is called with :meth:`callback`'s positional
-            arguments. When provided, if it returns false, this call is dropped.
+            See :attr:`filter`.
         `convert`: callable or None
-            A callable that is called with :meth:`callback`'s positional
-            arguments. It is called immediately as opposed to async.
-            If provided, the return value of convert is returned by
-            the iterator rather than the original value. Helpful
-            for callback values that need to be processed immediately.
+            See :attr:`convert`.
         `max_len`: int or None
-            If None, the callback queue may grow to an arbitrary length.
-            Otherwise, it is bounded to maxlen. Once it's full, when new items
-            are added a corresponding number of oldest items are discarded.
+            If None, the queue may grow to an arbitrary length.
+            Otherwise, it is bounded to ``maxlen``. Once it's full, when new
+            items are added a corresponding number of oldest items are
+            discarded.
+
+    .. note::
+
+        :meth:`stop` is called automatically if kivy's event loop exits while
+        the queue is in its ``with`` block.
+
+    E.g. try pressing the button in this app:
+
+    .. code-block:: python
+
+        from kivy_trio.to_kivy import AsyncKivyEventQueue
+        from kivy.app import App
+        from kivy.lang import Builder
+        import trio
+
+        class MyApp(App):
+
+            i = 0
+            queue: AsyncKivyEventQueue = None
+
+            async def run_app(self):
+                # run app and trio queue
+                async with trio.open_nursery() as nursery:
+                    nursery.start_soon(self.run_queue)
+                    nursery.start_soon(self.async_run, 'trio')
+
+            async def run_queue(self):
+                async with AsyncKivyEventQueue() as queue:
+                    # save queue so we can add stuff from button
+                    self.queue = queue
+                    # queue will finish when stop is called below
+                    async for a, b in queue:
+                        print(f'got {a}, {b}')
+
+            def button_pressed(self):
+                # add items to queue and stop queue/app after 5
+                self.queue.add_item(self.i, self.i ** 2)
+                self.i += 1
+                if self.i == 5:
+                    self.queue.stop()
+                    self.stop()
+
+            def build(self):
+                return Builder.load_string(
+                    "Button:\\n"
+                    "    text: 'Press me'\\n"
+                    "    on_release: app.button_pressed()")
+
+        trio.run(MyApp().run_app)
     """
 
     _quit: bool = False
 
-    send_channel: Optional[trio.MemorySendChannel] = None
+    _send_channel: Optional[trio.MemorySendChannel] = None
 
-    receive_channel: [trio.MemoryReceiveChannel] = None
+    _receive_channel: [trio.MemoryReceiveChannel] = None
 
-    queue: Optional[deque] = None
+    _queue: Optional[deque] = None
 
     filter: Optional[Callable] = None
+    """A callable that is internally called with :meth:`add_item` 's
+    positional arguments for each :meth:`add_item` call.
+
+    When provided, if the filter function returns false for these arguments,
+    :meth:`add_item` won't enqueue the item.
+    """
 
     convert: Optional[Callable] = None
+    """A callable that is internally called with :meth:`add_item` 's
+    positional arguments for each :meth:`add_item` call.
+
+    When provided, the return value of ``convert`` is enqueued and returned by
+    the iterator rather than the original value. It is helpful
+    for callback values that need to be processed immediately in the
+    synchronous context that adds it.
+    """
 
     _max_len = None
 
@@ -214,16 +294,16 @@ class AsyncKivyEventQueue:
     _trio_thread_token: Optional[TrioToken] = None
 
     def __init__(
-            self, filter_fn: Optional[Callable] = None,
+            self, filter: Optional[Callable] = None,
             convert: Optional[Callable] = None, max_len: Optional[int] = None,
             **kwargs):
         super().__init__(**kwargs)
-        self.filter = filter_fn
+        self.filter = filter
         self.convert = convert
         self._max_len = max_len
 
     async def __aenter__(self):
-        if self.queue is not None:
+        if self._queue is not None:
             raise TypeError('Cannot re-enter because it was not properly '
                             'cleaned up on the last exit')
 
@@ -234,7 +314,7 @@ class AsyncKivyEventQueue:
             if entry_token is None:
                 entry_token = current_trio_token()
         except RuntimeError as e:
-            if self.queue is None:
+            if self._queue is None:
                 return
             # if there is a queue, meaning it's in the with block, but we can't
             # find the token, then the user didn't set it
@@ -245,8 +325,8 @@ class AsyncKivyEventQueue:
 
         self._trio_token = entry_token
         self._trio_thread_token = thread_token
-        self.queue = deque(maxlen=self._max_len)
-        self.send_channel, self.receive_channel = trio.open_memory_channel(1)
+        self._queue = deque(maxlen=self._max_len)
+        self._send_channel, self._receive_channel = trio.open_memory_channel(1)
         self._eof_trio_event = trio.Event()
         self._quit = False
 
@@ -259,7 +339,7 @@ class AsyncKivyEventQueue:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         self._quit = True
-        self.send_channel = self.receive_channel = None
+        self._send_channel = self._receive_channel = None
         try:
             await async_run_in_kivy(self._stop_data_stream)()
         except EventLoopStoppedError:
@@ -268,7 +348,7 @@ class AsyncKivyEventQueue:
             # so we just need to wait for it to finish
             if self._eof_trio_event is not None:
                 await self._eof_trio_event.wait()
-        self.queue = None  # this lets us detect if stop raised an error
+        self._queue = None  # this lets us detect if stop raised an error
         self._eof_trio_event = None
         self._trio_token = None
         self._trio_thread_token = None
@@ -277,22 +357,24 @@ class AsyncKivyEventQueue:
         return self
 
     async def __anext__(self):
-        if self.send_channel is None:
+        if self._send_channel is None:
             raise TypeError('Can only iterate when context was entered')
 
-        while not self.queue and not self._quit:
-            await self.receive_channel.receive()
+        while not self._queue and not self._quit:
+            await self._receive_channel.receive()
 
-        if self.queue:
-            return self.queue.popleft()
+        if self._queue:
+            return self._queue.popleft()
         raise StopAsyncIteration
 
     def stop(self, *args):
-        """This function may be executed from another thread. Ignores if the
-        queue is not in the with block.
+        """Call from the synchronous side to make the async iterator end.
 
-        May raise an exception if restarted while it's here or if not
-        initialized.
+        This method may be executed from another thread. It is ignored though
+        if the queue is not in the with block.
+
+        It may raise an exception if the iterator is restarted while it's in the
+        method or if not initialized.
 
         May be called multiple times.
         """
@@ -308,17 +390,28 @@ class AsyncKivyEventQueue:
             try:
                 entry_token.run_sync_soon(self._send_on_channel)
             except trio.RunFinishedError as e:
-                if self.queue is None:
+                if self._queue is None:
                     return
                 # should never be able to be finished if the queue is not None
                 # except if the user entered again while we're doing this
                 raise
 
     def add_item(self, *args):
-        """This function may be executed from another thread
-        because the callback may be bound to code executing from an external
-        thread. This is meant to be driven by the trio side, so if the
-        trio side is not awaiting, this simply returns silently.
+        """Adds the args to the queue to be returned by the async iterator.
+
+        This method may be executed from another thread that has been
+        initialized with the trio context as described in
+        :mod:`kivy_trio.context`.
+
+        .. warning::
+
+            If the trio side has not entered the ``with`` block,
+            :meth:`add_item` returns silently.
+
+        .. note::
+
+            If :attr:`filter` or :attr:`convert` was provided, these functions
+            are called from within :meth:`add_item` before enqueuing.
         """
         f = self.filter
         if self._quit or f is not None and not f(*args):
@@ -328,7 +421,7 @@ class AsyncKivyEventQueue:
         if convert is not None:
             args = convert(*args)
 
-        queue = self.queue
+        queue = self._queue
         if queue is None:
             return
         queue.append(args)
@@ -341,14 +434,14 @@ class AsyncKivyEventQueue:
             try:
                 entry_token.run_sync_soon(self._send_on_channel)
             except trio.RunFinishedError as e:
-                if self.queue is None:
+                if self._queue is None:
                     return
                 # should never be able to be finished if the queue is not None
                 # except if the user entered again while we're doing this
                 raise
 
     def _send_on_channel(self):
-        send_channel = self.send_channel
+        send_channel = self._send_channel
         if send_channel is not None:
             try:
                 send_channel.send_nowait(None)
@@ -394,45 +487,93 @@ class AsyncKivyEventQueue:
 
 
 class AsyncKivyBind(AsyncKivyEventQueue):
-    """A class for asynchronously observing kivy properties and events.
+    """Asynchronously observe kivy properties and events using this queue.
 
-    Creates an async iterator which for every iteration waits and
-    returns the property or event value for every time the property changes
+    It creates an async iterator which for every iteration waits and then
+    yields the property or event value, every time the property changes
     or the event is dispatched.
 
-    The returned value is identical to the list of values passed to a function
-    bound to the event or property with bind. So at minimum it's a one element
-    (for events) or two element (for properties, instance and value) list.
+    The yielded value is identical to the list of values passed to a function
+    bound to the event or property with ``bind``. So at minimum it's a one
+    element (for events) or two element (for properties, instance and value)
+    list.
+
+    The interface is the same as :class:`AsyncKivyEventQueue` and it supports
+    its :attr:`~AsyncKivyEventQueue.filter`,
+    ':attr:`~AsyncKivyEventQueue.convert` functions and its ``max_len``
+    argument. Its :meth:`~AsyncKivyEventQueue.add_item` is automatically called
+    by the internal binding.
 
     :Parameters:
         `obj`: :class:`EventDispatcher`
-            The :class:`EventDispatcher` instance that contains the property
-            or event being observed.
+            See :attr:`obj`.
         `name`: str
-            The property or event name to observe.
+            See :attr:`name`.
         `current`: bool
-            Whether the iterator should return the current value on its
-            first class (True) or wait for the first event/property dispatch
-            before having a value (False). Defaults to True.
-            Only if it's a property and not an event.
-    E.g.::
-        async for x, y in AsyncBindQueue(
-            obj=widget, name='size', convert=lambda x: x[1]):
-            print(value)
-    Or::
-        async for touch in AsyncBindQueue(
-            obj=widget, name='on_touch_down',
-            convert=lambda x: x[0]):
-            print(value)
+            See :attr:`current`.
+
+    E.g. try resizing the window and then pressing the button in this app:
+
+    .. code-block:: python
+
+        from kivy_trio.to_kivy import AsyncKivyBind
+        from kivy.app import App
+        from kivy.lang import Builder
+        import trio
+
+        class MyApp(App):
+
+            queue: AsyncKivyBind = None
+
+            async def run_app(self):
+                # run app and trio queue
+                async with trio.open_nursery() as nursery:
+                    nursery.start_soon(self.run_queue)
+                    nursery.start_soon(self.async_run, 'trio')
+
+            async def run_queue(self):
+                # hack to ensure the app is running before binding
+                await trio.sleep(1)
+                async with AsyncKivyBind(obj=self.root, name='size') as queue:
+                    # save queue so we can add stuff from button
+                    self.queue = queue
+                    # queue will finish when stop is called below
+                    async for obj, value in queue:
+                        print(f'got {value}')
+
+            def stop(self, *largs):
+                super().stop(*largs)
+                self.queue.stop()
+
+            def build(self):
+                return Builder.load_string(
+                    "Button:\n"
+                    "    text: 'Resize me'\n"
+                    "    on_release: app.stop()")
+
+        trio.run(MyApp().run_app)
     """
 
-    obj = None
+    obj: Optional[EventDispatcher] = None
+    """The :class:`EventDispatcher` instance that contains the property or
+    event being observed.
+    """
 
-    name = ''
+    name: str = ''
+    """The property or event name to observe.
+    """
 
-    bound_uid = 0
+    _bound_uid = 0
 
-    current = True
+    current: bool = True
+    """Whether the iterator should yield the current property value on its
+    first iteration (True) or wait for the first dispatch before yielding the
+    value (False). Defaults to True.
+
+    .. note::
+
+        This only works for properties and ignored form events.
+    """
 
     def __init__(self, obj, name, current=True, **kwargs):
         super().__init__(**kwargs)
@@ -446,7 +587,7 @@ class AsyncKivyBind(AsyncKivyEventQueue):
         obj = self.obj
         name = self.name
 
-        uid = self.bound_uid = obj.fbind(name, self.add_item)
+        uid = self._bound_uid = obj.fbind(name, self.add_item)
         if not uid:
             raise ValueError(
                 '{} is not a recognized property or event of {}'
@@ -458,7 +599,7 @@ class AsyncKivyBind(AsyncKivyEventQueue):
     def _stop_data_stream(self):
         super()._stop_data_stream()
 
-        if self.bound_uid:
-            self.obj.unbind_uid(self.name, self.bound_uid)
-            self.bound_uid = 0
+        if self._bound_uid:
+            self.obj.unbind_uid(self.name, self._bound_uid)
+            self._bound_uid = 0
             self.obj = None
