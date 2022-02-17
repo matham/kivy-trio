@@ -7,7 +7,7 @@ from trio.lowlevel import current_trio_token, TrioToken
 import outcome
 import math
 from functools import wraps, partial
-from typing import Optional, Callable
+from typing import Optional, Callable, Awaitable, TypeVar, overload
 from collections import deque
 from asyncio import iscoroutinefunction
 
@@ -19,6 +19,9 @@ from kivy_trio.context import kivy_clock, kivy_thread, trio_entry, trio_thread
 __all__ = (
     'EventLoopStoppedError', 'async_run_in_kivy', 'AsyncKivyEventQueue',
     'AsyncKivyBind')
+
+
+T = TypeVar("T")
 
 
 class EventLoopStoppedError(Exception):
@@ -46,7 +49,19 @@ def _report_kivy_back_in_trio_thread_fn(task_container, task):
     trio.lowlevel.reschedule(task, task_container[1])
 
 
-def async_run_in_kivy(func=None, clock: Optional[ClockBase] = None):
+@overload
+def async_run_in_kivy(
+        func: Callable[..., T], clock: Optional[ClockBase]
+) -> Callable[..., Awaitable[T]]: ...
+
+
+@overload
+def async_run_in_kivy(
+    clock: Optional[ClockBase]
+) -> Callable[[Callable[..., T]], Callable[..., Awaitable[T]]]: ...
+
+
+def async_run_in_kivy(func=None, clock=None):
     """Decorator that runs the given function in a Kivy context in an
     asynchronous manner, waiting (asynchronously) until it's done.
 
@@ -265,7 +280,7 @@ class AsyncKivyEventQueue:
 
     _queue: Optional[deque] = None
 
-    filter: Optional[Callable] = None
+    filter: Optional[Callable[..., bool]] = None
     """A callable that is internally called with :meth:`add_item` 's
     positional arguments for each :meth:`add_item` call.
 
@@ -294,7 +309,7 @@ class AsyncKivyEventQueue:
     _trio_thread_token: Optional[TrioToken] = None
 
     def __init__(
-            self, filter: Optional[Callable] = None,
+            self, filter: Optional[Callable[..., bool]] = None,
             convert: Optional[Callable] = None, max_len: Optional[int] = None,
             **kwargs):
         super().__init__(**kwargs)
@@ -505,6 +520,7 @@ class AsyncKivyBind(AsyncKivyEventQueue):
     by the internal binding.
 
     :Parameters:
+
         `obj`: :class:`EventDispatcher`
             See :attr:`obj`.
         `name`: str

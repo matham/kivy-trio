@@ -85,7 +85,8 @@ from trio.lowlevel import current_trio_token
 import outcome
 import math
 from functools import wraps, partial
-from typing import Optional, Generator, Callable
+from typing import Optional, Generator, Callable, Awaitable, Any, Tuple, Dict, \
+    Union, Iterator
 from asyncio import iscoroutinefunction
 
 from kivy.clock import ClockBase, ClockNotRunningError, ClockEvent
@@ -97,22 +98,58 @@ __all__ = (
     'kivy_run_in_async_quiet', 'KivyCallbackEvent')
 
 
+AsyncFunc = Callable[..., Awaitable]
+MarkedFunc = Tuple[AsyncFunc, Tuple[Any], Dict[str, Any]]
+
+
 class KivyEventCancelled(BaseException):
-    """The exception injected into the waiting :func:`kivy_run_in_async`
-    decorated generator when the event is canceled.
+    """The exception raised in the waiting :func:`kivy_run_in_async`
+    decorated generator if the event is canceled or if one of the event
+    loops exit before doing the callback.
+
+    E.g.:
+
+    .. code-block:: python
+
+        @kivy_run_in_async
+        def trigger_async_error(self):
+            try:
+                yield mark(some_func)
+            except KivyEventCancelled:
+                # event was canceled while some_func was waiting to be called
+                pass
     """
     pass
 
 
-def mark(__func, *args, **kwargs):
-    """Collects the function and its parameters to be used by
-    :func:`kivy_run_in_async` as needed.
+def mark(
+        __async_func: AsyncFunc, *args: Any, **kwargs: Any) -> MarkedFunc:
+    """Collects the function and its parameters in a :func:`kivy_run_in_async`
+    decorated generator. The function is subsequently called and awaited by
+    trio, passing in its positional and keyword arguments.
 
-    :param __func: The function or method object.
-    :param args: Any positional arguments.
-    :param kwargs: Any keyword arguments.
+    E.g. in the code below, :func:`mark` collects the function, positional, and
+    keyword arguments and yields it to be called and awaited by trio:
+
+        async def call_server(name, ip, port):
+            if name == "Unknown":
+                raise ValueError
+
+        @kivy_run_in_async
+        def on_button_press(self, name, ip=0.0.0.0, port=6768):
+            try:
+                yield mark(call_server, name, ip=ip, port=port)
+            except ValueError:
+                # async call_server function failed with ValueError
+                pass
+
+    :param __async_func: The async function or method to call.
+    :param args: Any positional arguments to be passed to the function.
+    :param kwargs: Any keyword arguments to be passed to the function.
+    :return: A collection of the functions and its args to be used internally.
+        The exact form is internal and is not part of the public API.
     """
-    return __func, args, kwargs
+    return __async_func, args, kwargs
 
 
 def _callback_raise_exception(*args):
@@ -124,26 +161,88 @@ def _do_nothing(*args):
 
 
 class KivyCallbackEvent:
-    """The event class returned when a :func:`kivy_run_in_async` decorated
-    generator is called.
+    """The event class returned when a :func:`kivy_run_in_async` or
+    :func:`kivy_run_in_async_quiet` decorated function is called.
+    It represents the async code scheduled to be called by trio.
 
     This class should not be instantiated manually in user code.
+
+    E.g. the following code prints the event as it's scheduled:
+
+    .. code-block:: python
+
+        import trio
+        from kivy.app import App
+        from kivy.lang import Builder
+        from kivy_trio.to_trio import kivy_run_in_async_quiet, \
+kivy_run_in_async, mark
+        from kivy_trio.context import initialize_shared_thread
+
+        kv = \"""
+        BoxLayout:
+            Button:
+                text: "Simple async"
+                on_release: print(f'Event: {app.do_something_simple_async()}')
+            Button:
+                text: "async with error checking"
+                on_release: print(f'Event: {app.call_async()}')
+        \"""
+
+        class DemoApp(App):
+
+            def build(self):
+                return Builder.load_string(kv)
+
+            @kivy_run_in_async_quiet
+            async def do_something_simple_async(self):
+                await trio.sleep(.1)
+                print('Slept')
+
+            async def do_async(self):
+                await trio.sleep(1)
+                print('Slept')
+                raise ValueError('Woke up')
+
+            @kivy_run_in_async
+            def call_async(self):
+                try:
+                    yield mark(self.do_async)
+                except ValueError as e:
+                    print(f'Got error "{e}"')
+
+            def on_start(self):
+                initialize_shared_thread()
+
+        trio.run(DemoApp().async_run, 'trio')
     """
 
-    __slots__ = '_gen', '_clock', '_orig_func', '_clock_event'
+    __slots__ = (
+        '_gen', '_clock', '_orig_func', '_clock_event', '_marked_func_name',
+        '__weakref__')
 
-    _gen: Optional[Generator]
+    _gen: Optional[Generator[MarkedFunc, None, Any]]
 
     _clock: ClockBase
 
-    _orig_func: Callable
+    _orig_func: Union[
+        AsyncFunc, Callable[..., Generator[MarkedFunc, None, Any]]]
 
     _clock_event: Optional[ClockEvent]
 
-    def __init__(self, clock: ClockBase, func, gen, ret_func):
+    _marked_func_name: str
+
+    def __init__(
+            self, clock: ClockBase,
+            func: Union[
+                AsyncFunc, Callable[..., Generator[MarkedFunc, None, Any]]],
+            gen: Generator[MarkedFunc, None, Any],
+            ret_func: MarkedFunc
+    ):
         super().__init__()
+
         self._clock = clock
         self._orig_func = func
+        self._marked_func_name = str(ret_func[0])
 
         # if kivy stops before we finished processing gen, cancel it
         self._gen = gen
@@ -174,16 +273,105 @@ class KivyCallbackEvent:
         except BaseException as e:
             self._cancel(e=e)
 
-    def cancel(self, *args):
-        """Cancels the waiting event.
+    def __str__(self):
+        marked = self._marked_func_name
+        orig = str(self._orig_func)
+        if marked == orig:
+            return f'<{self.__class__.__name__} func={orig}>'
+        return f'<{self.__class__.__name__} func={marked}, generator={orig}>'
 
-        Raises a :class:`KivyEventCancelled` exception into the generator.
-        The coroutine will still finish executing in trio if it's not finished,
-        but its result will be discarded.
+    def cancel(self, *args) -> None:
+        """Cancels the waiting event from reporting back to the kivy thread.
+
+        The async code itself is immediately scheduled to be executed from the
+        async context so that can't be canceled once started and it will finish
+        executing unless that is manually canceled using trio's mechanisms.
+        However, :meth:`cancel` allows canceling the generator if
+        :func:`kivy_run_in_async` was used. Meaning, canceling will inject a
+        :class:`KivyEventCancelled` exception into the waiting generator.
+        If the async code hasn't started executing then it will also be
+        canceled. However, we don't provide visibility to the user whether the
+        async code has started.
+
+        The injected :class:`KivyEventCancelled` will be caught by cancel so
+        that the exception will not be propagated beyond :meth:`cancel` and it
+        won't cause an app crash.
 
         .. warning::
 
-            Only safe to be called from the kivy thread.
+            This is only safe to be called from the kivy thread.
+
+        E.g. in the following code we schedule a async sleep event for 5s and
+        then cancel it after 0.5s. In one button we only cancel the generator
+        while the other uses a trio mechanism to also manually cancel the
+        waiting trio code:
+
+        .. code-block:: python
+
+            import trio
+            from kivy.app import App
+            from kivy.lang import Builder
+            from kivy.clock import Clock
+            from kivy_trio.to_trio import kivy_run_in_async, mark, \
+KivyEventCancelled
+            from kivy_trio.context import initialize_shared_thread
+
+            kv = \"""
+            BoxLayout:
+                Button:
+                    text: "async without full cancel"
+                    on_release: app.start_and_cancel_async(False)
+                Button:
+                    text: "async with full cancel"
+                    on_release: app.start_and_cancel_async(True)
+            \"""
+
+            class DemoApp(App):
+
+                # scope we use to manually cancel async code from trio
+                _cancel_scope = None
+
+                def build(self):
+                    return Builder.load_string(kv)
+
+                async def do_async(self, allow_cancel):
+                    print('starting to async sleep')
+                    if allow_cancel:
+                        # if we want to be able to cancel trio's code, we need
+                        # to create a scope that can be canceled
+                        with trio.CancelScope() as self._cancel_scope:
+                            try:
+                                await trio.sleep(5)
+                            except trio.Cancelled:
+                                print(\
+'Async sleeping code was canceled by trio')
+                        self._cancel_scope = None
+                    else:
+                        await trio.sleep(5)
+                        print('Finished async sleeping')
+
+                @kivy_run_in_async
+                def call_async(self, allow_cancel):
+                    try:
+                        yield mark(self.do_async, allow_cancel=allow_cancel)
+                    except KivyEventCancelled:
+                        # catch the cancellation event
+                        print(\
+'Generator waiting for async to finish was canceled')
+                        if self._cancel_scope is not None:
+                            # we can call trio's cancel because it's running \
+in kivy thread
+                            self._cancel_scope.cancel()
+                    print('Generator finished')
+
+                def start_and_cancel_async(self, allow_cancel):
+                    event = self.call_async(allow_cancel)
+                    Clock.schedule_once(event.cancel, .5)
+
+                def on_start(self):
+                    initialize_shared_thread()
+
+            trio.run(DemoApp().async_run, 'trio')
         """
         self._cancel(suppress_cancel=True)
 
@@ -192,7 +380,7 @@ class KivyCallbackEvent:
             return
 
         if e is None:
-            e = KivyEventCancelled
+            e = KivyEventCancelled("Event was canceled")
 
         self._clock_event.cancel()
         self._clock_event = None
@@ -269,12 +457,125 @@ class KivyCallbackEvent:
             pass
 
 
-def kivy_run_in_async(gen):
-    """Decorator that takes a generator that yields an async coroutine,
-    schedules it in trio, and sends the result or exception as the return value
-    of the ``yield`` statement in the generator.
+def kivy_run_in_async(
+        gen: Callable[..., Generator[MarkedFunc, None, Any]]
+) -> Callable[..., KivyCallbackEvent]:
+    """Decorator for a generator that yields an async coroutine. When the
+    decorated generator is called in synchronous code from Kivy, it schedules
+    the async coroutine in trio and returns a :class:`KivyCallbackEvent`
+    representing the scheduled code.
 
-    See :mod:`kivy_trio.to_trio` for details.
+    If the async coroutine cannot cause an exception, you don't need its
+    return value, and we don't care if it's canceled with
+    :meth:`~KivyCallbackEvent.cancel` while we still wait, you can use
+    :func:`kivy_run_in_async_quiet` instead to decorate the async code directly.
+
+    E.g. to execute async code in trio with passed parameters and then catch
+    the exception it raises:
+
+    .. code-block:: python
+
+        import trio
+        from kivy.app import App
+        from kivy.lang import Builder
+        from kivy_trio.to_trio import kivy_run_in_async, mark
+        from kivy_trio.context import initialize_shared_thread
+
+        class DemoApp(App):
+
+            def build(self):
+                return Builder.load_string(
+                    "Button:\\n"
+                    "    text: 'Press me'\\n"
+                    "    on_release: app.call_async(5)")
+
+            async def do_async(self, duration):
+                print(f'Sleeping for {duration}s')
+                await trio.sleep(duration)
+                raise ValueError('Woke up')
+
+            @kivy_run_in_async
+            def call_async(self, duration):
+                try:
+                    yield mark(self.do_async, duration=duration)
+                except ValueError as e:
+                    print(f'Got exception "{e}"')
+
+            def on_start(self):
+                initialize_shared_thread()
+
+        trio.run(DemoApp().async_run, 'trio')
+
+    When run and pressing a button and waiting, this prints::
+
+        Sleeping for 5s
+        Got exception "Woke up"
+
+    Similarly, by changing ``do_async`` and ``call_async`` to the following:
+
+    .. code-block:: python
+
+        async def do_async(self, duration):
+            print(f'Sleeping for {duration}s')
+            await trio.sleep(duration)
+            return duration
+
+        @kivy_run_in_async
+            def call_async(self, duration):
+                result = yield mark(self.do_async, duration=duration)
+                print(f'Slept for {result}')
+
+    the async code won't raise an exception and instead returns the slept time
+    to the generator and when run it prints::
+
+        Sleeping for 5s
+        Slept for 5
+
+    The generator can also catch exceptions due to the user canceling the event
+    with :meth:`~KivyCallbackEvent.cancel` (see that method for details)
+    or if the Kivy event loop closes before the async code is done.
+
+    The following example demonstrates the cancellation that automatically
+    happens when Kivy ends while the async code is still waiting. Run the code,
+    press the button and then exit the window while it's sleeping:
+
+    .. code-block:: python
+
+        import trio
+        from kivy.app import App
+        from kivy.lang import Builder
+        from kivy_trio.to_trio import kivy_run_in_async, mark, \
+KivyEventCancelled
+        from kivy_trio.context import initialize_shared_thread
+
+        class DemoApp(App):
+
+            def build(self):
+                return Builder.load_string(
+                    "Button:\\n"
+                    "    text: 'Press me'\\n"
+                    "    on_release: app.call_async(5)")
+
+            async def do_async(self, duration):
+                print(f'Sleeping for {duration}s')
+                await trio.sleep(duration)
+
+            @kivy_run_in_async
+            def call_async(self, duration):
+                try:
+                    yield mark(self.do_async, duration=duration)
+                except KivyEventCancelled as e:
+                    print(f'Got canceled exception "{e}"')
+
+            def on_start(self):
+                initialize_shared_thread()
+
+        trio.run(DemoApp().async_run, 'trio')
+
+    When run like that it should print::
+
+        Sleeping for 5s
+        Got canceled exception "Event was canceled"
     """
     @wraps(gen)
     def run_to_yield(*args, **kwargs):
@@ -291,12 +592,50 @@ def kivy_run_in_async(gen):
     return run_to_yield
 
 
-def kivy_run_in_async_quiet(async_func):
-    """Decorator that takes a generator that yields an async coroutine,
-    schedules it in trio, and sends the result or exception as the return value
-    of the ``yield`` statement in the generator.
+def kivy_run_in_async_quiet(
+        async_func: AsyncFunc) -> Callable[..., KivyCallbackEvent]:
+    """Decorator for an async coroutine that schedules the async coroutine in
+    trio and returns a :class:`KivyCallbackEvent` representing the scheduled
+    code.
 
-    See :mod:`kivy_trio.to_trio` for details.
+    It's similar to :func:`kivy_run_in_async`, however unlike that function
+    that can catch exceptions and the async coroutine's return value, this will
+    only execute the async coroutine without any protection or return value.
+
+    :func:`kivy_run_in_async_quiet` should only be used if the async coroutine
+    cannot cause an exception (as it can't be caught and will crash the
+    program), you don't need its return value, and we don't care if it's
+    canceled with :meth:`~KivyCallbackEvent.cancel` while we still wait
+    (because you won't know) and Kivy won't be stopped while we wait (that will
+    raise a :class:`KivyEventCancelled` in Kivy as it exits).
+
+    E.g.:
+
+    .. code-block:: python
+
+        import trio
+        from kivy.app import App
+        from kivy.lang import Builder
+        from kivy_trio.to_trio import kivy_run_in_async_quiet
+        from kivy_trio.context import initialize_shared_thread
+
+        class DemoApp(App):
+
+            def build(self):
+                return Builder.load_string(
+                    "Button:\\n"
+                    "    text: 'Press me'\\n"
+                    "    on_release: app.call_async(5)")
+
+            @kivy_run_in_async_quiet
+            async def call_async(self, duration):
+                print(f'Sleeping for {duration}s')
+                await trio.sleep(duration)
+
+            def on_start(self):
+                initialize_shared_thread()
+
+        trio.run(DemoApp().async_run, 'trio')
     """
     @wraps(async_func)
     def run_to_yield(*args, **kwargs):
