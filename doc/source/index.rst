@@ -9,7 +9,7 @@ Contents:
    :maxdepth: 2
 
    getting_started.rst
-   api.rst
+   api/api.rst
 
 * :ref:`genindex`
 * :ref:`modindex`

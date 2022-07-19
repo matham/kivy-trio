@@ -6,9 +6,9 @@ jobs:
   lint_test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Set up Python 3.x
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v2
       with:
         python-version: 3.x
     - name: Install dependencies
@@ -22,24 +22,23 @@ jobs:
   linux_test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Set up Python 3.x
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v2
       with:
         python-version: 3.x
-    - name: Make sdist
-      run: python3 setup.py sdist --formats=gztar
-    - name: Install project
+
+    - name: Make sdist/wheel
       run: |
-        python3 -m pip install kivy --pre
-        python3 -m pip install -e .[dev]
-    - name: Make wheel
-      run: python3 setup.py bdist_wheel --universal
+        python -m pip install build
+        python -m build .
+
     - name: Upload wheels as artifact
       uses: actions/upload-artifact@v2
       with:
         name: wheels
         path: dist
+
     - name: Upload to GitHub Release
       uses: softprops/action-gh-release@v0.1.14
       if: startsWith(github.ref, 'refs/tags/')
@@ -47,6 +46,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         files: dist/*
+
     - name: Publish to PyPI
       if: startsWith(github.ref, 'refs/tags/')
       env:
@@ -55,9 +55,13 @@ jobs:
       run: |
         python -m pip install twine
         twine upload dist/*
+
+    - name: Install project
+      run: python3 -m pip install -e .[dev]
+
     - name: Test with pytest
-      run: |
-        python3 -m pytest --cov=kivy_trio --cov-report term --cov-branch kivy_trio/tests
+      run: python3 -m pytest --cov=kivy_trio --cov-report term --cov-branch kivy_trio/tests
+
     - name: Coveralls upload
       run: python3 -m coveralls
       env:
@@ -66,42 +70,42 @@ jobs:
   windows_test:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Set up Python 3.x
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v2
       with:
         python-version: 3.x
+
     - name: Install dependencies
       env:
         KIVY_GL_BACKEND: angle_sdl2
-      run: |
-        python -m pip install kivy --pre
-        python -m pip install -e .[dev]
+      run: python -m pip install -e .[dev]
+
     - name: Test with pytest
       env:
         KIVY_GL_BACKEND: angle_sdl2
-      run: |
-        python -m pytest --cov=kivy_trio --cov-report term --cov-branch kivy_trio/tests
+      run: python -m pytest --cov=kivy_trio --cov-report term --cov-branch kivy_trio/tests
 
   docs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Set up Python 3.x
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v2
       with:
         python-version: 3.x
+
     - name: Install dependencies
       env:
           KIVY_DOC_INCLUDE: 1
           KIVY_DOC: 1
-      run: |
-        python3 -m pip install kivy --pre
-        python3 -m pip install -e .[dev]
+      run: python3 -m pip install -e .[dev]
+
     - name: Generate docs
       run: |
         cd doc
         make html
+
     - name: gh-pages upload
       if: github.event_name == 'push' && github.ref == 'refs/heads/master'
       env:
