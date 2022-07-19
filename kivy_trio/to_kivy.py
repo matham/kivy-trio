@@ -1,13 +1,180 @@
-"""Kivy callbacks from Trio
-===========================
+"""Executing synchronous code in Kivy from trio
+===============================================
 
+Kivy is a GUI framework that runs an event loop that calls functions
+synchronously upon interactions with the GUI. Some applications also run a
+Trio eventloop executing async code in the Kivy thread (when kivy is run
+asynchronously) or in a separate thread. This package enables asynchronously
+executing synchronous code in the Kivy thread from Trio such that Trio is not
+blocked waiting for the Kivy clock to execute the code.
+
+E.g. after the trio and kivy :mod:`kivy_trio.context` is initialized, the
+following function that updates a Kivy button's state:
+
+.. code-block:: python
+
+    @async_run_in_kivy
+    def set_button(kivy_app, state):
+        kivy_app.warn_button.state = state
+
+can be scheduled to run in Kivy from within a Trio context, even when Trio is
+running in a differernt thread - simply by calling it:
+
+.. code-block:: python
+
+    app = App.get_running_app()
+    await set_button(app, 'down')
+
+This uses the :func:`async_run_in_kivy` to automatically schedule the
+synchronous function with Kivy's clock to run in the Kivy context by wrapping
+it in an asynchronous decorator and waiting until it's done.
+
+:func:`async_run_in_kivy` returns the function's return value and catches and
+re-raises any exceptions in the waiting Trio context as shown in this example
+that sets a label to a number, raising an exception if it's a negative
+value:
+
+.. code-block:: python
+
+    import trio
+    from kivy.app import App
+    from kivy.uix.label import Label
+    from random import random
+    from kivy_trio.to_kivy import async_run_in_kivy
+    from kivy_trio.context import initialize_shared_thread
+
+    class DemoApp(App):
+
+        start_event = None
+
+        def build(self):
+            return Label(text='Empty')
+
+        @async_run_in_kivy
+        def update_text(self):
+            val = random() - .5
+            if val < 0:
+                raise ValueError(f'Cannot set it to "{val}"')
+
+            self.root.text = str(val)
+            return val
+
+        def on_start(self):
+            # notify the waiting async trio that kivy started so it can proceed
+            initialize_shared_thread()
+            self.start_event.set()
+
+    async def run_app():
+        app = DemoApp()
+        app.start_event = trio.Event()
+
+        async with trio.open_nursery() as nursery:
+            # start app and wait until the app is started
+            nursery.start_soon(app.async_run, 'trio')
+            await app.start_event.wait()
+
+            # now that the app is started, change the text, wait, and exit
+            for _ in range(5):
+                try:
+                    print('set label value to', await app.update_text())
+                except ValueError as e:
+                    print(f'got exception "{e}"')
+                await trio.sleep(2)
+
+            app.stop()
+
+    trio.run(run_app)
+
+When run, this printed e.g.::
+
+    got exception "Cannot set it to "-0.41975669370612656""
+    set label value to 0.2312564066758095
+    set label value to 0.34180029860423355
+    set label value to 0.054374588655983325
+    set label value to 0.08700667397013406
+
+:func:`async_run_in_kivy` does the following when called as e.g.
+``await app.update_text()`` in three phases:
+
+1. First it wraps and schedules the underlying ``update_text`` method to be
+   called by Kivy in the Kivy thread (if they share a thread and properly
+   initialized it just executes it directly skipping the remaining steps).
+2. Next, it waits for Kivy to execute the method, either saving its return value
+   or catching the exception.
+3. Finally, when the function has finished or raised an exception, the waiting
+   async line is woken up returning the return value or re-raising the
+   exception.
+
+Consequently, the marked synchronous function is executed in Kivy, but the
+return value is then passed back or any exception the function has raised is
+similarly re-raised in the Trio context when the line resumes.
+
+Lifecycle and Cancellation
+--------------------------
+
+A :func:`kivy_run_in_async` and :func:`kivy_run_in_async_quiet` decorated
+function or method may only be called while the Kivy event loop and trio event
+loop are running. Otherwise, an exception may be raised when the function is
+called.
+
+If the kivy event loop ends while the coroutine is executing in trio, such as
+when the Kivy GUI exits, the event will be canceled and a
+:class:`KivyEventCancelled` exception will be injected
+into the generator. The coroutine will still finish executing in trio, but the
+result will be discarded when it's done.
+
+A waiting event may be explicitly canceled with
+:meth:`KivyCallbackEvent.cancel`. As above a :class:`KivyEventCancelled`
+exception will be injected into the generator and the coroutine will still
+finish executing in trio, but its result will be discarded.
+
+E.g. given the following functions:
+
+.. code-block:: python
+
+    async def send_device_message(delay, device, message):
+        await trio.sleep(delay)
+        result = await device.send(message)
+        return result
+
+    @kivy_run_in_async
+    def kivy_send_message(delay, device, message):
+        try:
+            response = yield mark(
+                send_device_message, delay, device, message=message)
+            print(f'Device responded with {response}')
+        except KivyEventCancelled:
+            print('Event canceled')
+
+then if we do:
+
+.. code-block:: python
+
+    >>> dev = MyDevice()
+    >>> event = kivy_send_message(3, dev, 'hello')
+    >>> # a little later in kivy
+    >>> event.cancel()
+
+this will print ``Event canceled``.
+
+Threading
+---------
+
+A :func:`kivy_run_in_async` and :func:`kivy_run_in_async_quiet` decorated
+function is only safe to be called from the kivy thread, and generally only if
+the :mod:`kivy_trio.context` was properly initialized (if kivy and trio share
+the thread initialization is not stricly nessecary). The coroutine will be
+executed in the trio context that it was initialized to, which can be the same
+or another thread.
+
+See the :mod:`kivy_trio.context` for details.
 """
 import trio
 from trio.lowlevel import current_trio_token, TrioToken
 import outcome
 import math
 from functools import wraps, partial
-from typing import Optional, Callable, Awaitable, TypeVar, overload
+from typing import Optional, Callable, Awaitable, TypeVar, overload, Coroutine
 from collections import deque
 from asyncio import iscoroutinefunction
 
@@ -51,22 +218,23 @@ def _report_kivy_back_in_trio_thread_fn(task_container, task):
 
 @overload
 def async_run_in_kivy(
-        func: Callable[..., T], clock: Optional[ClockBase]
+        func: Callable[..., T], clock: Optional[ClockBase] = ...
 ) -> Callable[..., Awaitable[T]]: ...
 
 
 @overload
 def async_run_in_kivy(
-    clock: Optional[ClockBase]
+    clock: Optional[ClockBase] = ...
 ) -> Callable[[Callable[..., T]], Callable[..., Awaitable[T]]]: ...
 
 
 def async_run_in_kivy(func=None, clock=None):
-    """Decorator that runs the given function in a Kivy context in an
-    asynchronous manner, waiting (asynchronously) until it's done.
+    """Decorator that runs the given function or method in a Kivy context
+    waiting (asynchronously) until it's done.
 
-    It is primarily useful when kivy and trio are running in different threads.
-    See :mod:`kivy_trio.context` and the note below for how to initialize
+    It is primarily useful when kivy and trio are running in different threads
+    and we need to run some Kivy code that change the GUI, waiting until it's
+    done. See :mod:`kivy_trio.context` and the note below for how to initialize
     kivy/trio so it knows the kivy/trio event loop it runs within.
 
     :param func: The synchronous function to be called in the Kivy event loop.
@@ -75,18 +243,84 @@ def async_run_in_kivy(func=None, clock=None):
         provided and :attr:`kivy_trio.context.kivy_clock` is not set, otherwise
         one of them is used in that order.
 
-    E.g.:
+    E.g. the in the following app the trio async code will change a label
+    and print the result:
 
     .. code-block:: python
 
-        >>> @async_run_in_kivy
-        ... def set_button_state(state):
-        ...     kivy_button.pressing_button = state
-        >>> # set the button down from trio
-        >>> await set_button_state('down')
-        >>> await trio.sleep(5)
-        >>> # reset the button back from trio
-        >>> await set_button_state('normal')
+        import trio
+        from kivy.app import App
+        from kivy.uix.label import Label
+        from kivy_trio.to_kivy import async_run_in_kivy
+        from kivy_trio.context import initialize_shared_thread
+
+
+        class DemoApp(App):
+
+            start_event = None
+
+            def build(self):
+                return Label(text='Empty')
+
+            @async_run_in_kivy
+            def update_text(self, text):
+                # set the label of the text
+                self.root.text = text
+                return text * 2
+
+            def on_start(self):
+                # notify the waiting async trio that kivy started so it can proceed
+                initialize_shared_thread()
+                self.start_event.set()
+
+
+        async def run_app():
+            app = DemoApp()
+            app.start_event = trio.Event()
+
+            async with trio.open_nursery() as nursery:
+                # start app and wait until the app is started
+                nursery.start_soon(app.async_run, 'trio')
+                await app.start_event.wait()
+
+                # now that the app is started, change the text, wait, and exit
+                print(await app.update_text('App started'))
+                await trio.sleep(2)
+                print(await app.update_text('App closing'))
+                await trio.sleep(2)
+                app.stop()
+
+        trio.run(run_app)
+
+    When run, this prints::
+
+        App startedApp started
+        App closingApp closing
+
+    and exits the Kivy app.
+
+    Similarly, it will catch any exceptions in the decorated function and
+    re-raise it in the waiting async code. E.g. If we change ``update_text`` to
+
+    .. code-block:: python
+
+        @async_run_in_kivy
+        def update_text(self, text):
+            raise ValueError(f'Cannot set it to "{text}"')
+
+    then when run we'll get something like the following error::
+
+        Traceback (most recent call last):
+           File "mod.py", line 41, in <module>
+             trio.run(run_app)
+           File _run.py", line 1932, in run
+             raise runner.main_task_outcome.error
+           File "mod_16.py", line 35, in run_app
+             print(await app.update_text('App started'))
+           ...
+           File "mod.py", line 17, in update_text
+             raise ValueError(f'Cannot set it to "{text}"')
+         ValueError: Cannot set it to "App started"
 
     .. note::
 
@@ -94,7 +328,7 @@ def async_run_in_kivy(func=None, clock=None):
         thread is running currently) it will schedule the function to be called
         using the Kivy Clock in the Kivy thread in the next clock frame,
         otherwise, if we know it's running in the same thread (e.g. because
-        :func:`~kivy_trio.context.initialize_shared_thread`) was used, it may
+        :func:`~kivy_trio.context.initialize_shared_thread` was used), it may
         call the function directly.
     """
     # if it's canceled in the async side, it either succeeds if we cancel on
@@ -276,7 +510,7 @@ class AsyncKivyEventQueue:
 
     _send_channel: Optional[trio.MemorySendChannel] = None
 
-    _receive_channel: [trio.MemoryReceiveChannel] = None
+    _receive_channel: Optional[trio.MemoryReceiveChannel] = None
 
     _queue: Optional[deque] = None
 
@@ -591,7 +825,7 @@ class AsyncKivyBind(AsyncKivyEventQueue):
         This only works for properties and ignored form events.
     """
 
-    def __init__(self, obj, name, current=True, **kwargs):
+    def __init__(self, obj, name: str, current: bool = True, **kwargs):
         super().__init__(**kwargs)
         self.name = name
         self.obj = obj

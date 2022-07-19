@@ -1,9 +1,40 @@
-"""Async coroutines in Trio from Kivy
-=====================================
+"""Executing async coroutines in Trio from Kivy
+===============================================
 
-:func:`kivy_run_in_async` is a kivy decorator that allows executing an async
-coroutine in the trio context. E.g. after the trio and kivy
-:mod:`kivy_trio.context` is initialized, the following async function:
+Kivy is a GUI framework that runs an event loop that calls functions
+synchronously upon interactions with the GUI. Some applications also run a
+Trio eventloop executing async code in the Kivy thread (when kivy is run
+asynchronously) or in a separate thread. This package enables Kivy to execute
+an async coroutine in the trio context.
+
+E.g. after the trio and kivy :mod:`kivy_trio.context` is initialized, the
+following async function that sends a message to a device:
+
+.. code-block:: python
+
+    @kivy_run_in_async_quiet
+    async def send_device_message(delay, device, message):
+        await trio.sleep(delay)
+        await device.send(message)
+
+can be scheduled to run in Trio from within a kivy context simply by calling it:
+
+.. code-block:: python
+
+    dev = MyDevice()
+    send_device_message(3, dev, 'hello')
+
+This uses the :func:`kivy_run_in_async_quiet` to automatically schedule the
+async function to run in the trio context by wrapping it in a synchronous
+decorator. Then, when ``send_device_message`` is called by Kivy, Kivy doesn't
+block waiting for the function to finish.
+
+:func:`kivy_run_in_async_quiet` can only be used for async functions or methods
+that cannot raise an exception and when we don't need a return value. Using it
+on functions that can raise an exception is unsafe as it will crash the program.
+
+Instead, :func:`kivy_run_in_async` can be used for general functions and methods
+as in the following modified async function example:
 
 .. code-block:: python
 
@@ -11,74 +42,135 @@ coroutine in the trio context. E.g. after the trio and kivy
         await trio.sleep(delay)
         return await device.send(message)
 
-can be scheduled to run from within a kivy context as follows:
+Now, we also need to define a synchronous wrapper function that handles the
+return value and potential exceptions as follows:
 
 .. code-block:: python
 
     @kivy_run_in_async
-    def kivy_send_message(message):
-        dev = MyDevice()
-        response = yield mark(send_device_message, delay, dev, message=message)
-        print(f'Device responded with {response}')
+    def kivy_send_message(delay, device, message):
+        try:
+            response = yield mark(
+                send_device_message, delay, device, message=message)
+            print(f'Device responded with {response}')
+        except ValueError as e:
+            print(f'Device failed with error {e}')
 
-Subsequently, from Kivy we can call ``event = kivy_send_message('hello')``
-and this will suspend the function at the ``yield`` statement and schedule
-``send_device_message`` to be called and waited on in
-trio with the given parameters. When the coroutine returns in trio, the result
-of the coroutine will automatically be sent to resume the generator, the
-``yield`` statement will return the result and the ``kivy_send_message``
-function will finish executing.
+This is similarly scheduled to run in a trio context from within a kivy context
+by calling it:
+
+.. code-block:: python
+
+    dev = MyDevice()
+    kivy_send_message(3, dev, 'hello')
+
+:func:`kivy_run_in_async` performs the following actions when called as
+``event = kivy_send_message(...)`` in three phases.
+
+1. First :func:`kivy_run_in_async` instantiates the underlying
+   ``kivy_send_message`` generator to get the yielded value. This advances
+   ``kivy_send_message`` internally to the ``yield`` point. The value the
+   wrapper function must yield to the decorator is a :func:`mark`-ed up async
+   function and the positional/keyword arguments that will be passed to it.
+2. Next, the :func:`kivy_run_in_async` decorator immediately schedules the
+   marked async function to be called in Trio, with the wrapper suspended at
+   the ``yield`` point.
+3. Finally, when the async function has finished or raised an exception in Trio,
+   using the kivy clock the generator is resumed from the ``yield`` point
+   by the decorator. It then finishes executing the wrapper function by yielding
+   the return value of the wrapped async function or re-raises its exception.
+
+Consequently, the marked async function is executed in Trio, but the return
+value is then passed back or any exception the async function has raised is
+similarly re-raised in the kivy context when the generator resumes.
 
 Exceptions
 ----------
 
 If the async coroutine raises an exception, the exception will be caught and
-sent to resume the generator at the yield statement so the generator will
-raise that exception. So e.g.:
+sent to resume the wrapper generator at the ``yield`` statement so the wrapper
+will raise that exception and be given an opportunity to handle it. So e.g.:
 
 .. code-block:: python
 
     async def raise_error():
-        raise ValueError()
+        raise ValueError('Goodbye')
 
     @kivy_run_in_async
     def kivy_send_message():
         try:
             response = yield mark(raise_error)
-        except ValueError:
-            print('Error caught')
+        except ValueError as e:
+            print(f'Error caught {e}')
 
 when ``kivy_send_message`` is called, it'll catch the exception raised in trio
-and print ``'Error caught'``.
+and print ``'Error caught Goodbye'``. If the exception is not caught, then it'll
+crash Kivy because it's the Kivy Clock that is actually executing it.
+
+If :func:`kivy_run_in_async_quiet` was used instead to decorate ``raise_error``
+directly, the Kivy event loop will crash, so it is only to be used for
+functions that can't raise exceptions.
 
 Lifecycle and Cancellation
 --------------------------
 
-A :func:`kivy_run_in_async` decorated function or method may only be called
-while the Kivy event loop and trio event loop are running. Otherwise, an
-exception will be raised when the function is called.
+A :func:`kivy_run_in_async` and :func:`kivy_run_in_async_quiet` decorated
+function or method may only be called while the Kivy event loop and trio event
+loop are running. Otherwise, an exception may be raised when the function is
+called.
 
-If the kivy event loop ends while the coroutine is executing in trio, the event
-will be canceled and a :class:`KivyEventCancelled` exception will be raised
-into the generator. The coroutine will still finish executing in trio, but the
-result will be discarded when it's done.
+If the kivy event loop ends while the coroutine is executing in trio, such as
+when the Kivy GUI exits, the event will be canceled and a
+:class:`KivyEventCancelled` exception will be injected
+into the wrapper generator. The coroutine will still finish executing in trio
+and there's currently no way to cancel that once it started, but the result
+will be discarded when it's done.
 
-An waiting event may be explicitly canceled with
+A waiting event may be explicitly canceled with
 :meth:`KivyCallbackEvent.cancel`. As above a :class:`KivyEventCancelled`
-exception will be raised into the generator and the coroutine will still finish
-executing in trio, but its result will be discarded.
+exception will be injected into the generator and the coroutine will still
+finish executing in trio, but its result will be discarded.
+
+E.g. given the following functions:
+
+.. code-block:: python
+
+    async def send_device_message(delay, device, message):
+        await trio.sleep(delay)
+        result = await device.send(message)
+        return result
+
+    @kivy_run_in_async
+    def kivy_send_message(delay, device, message):
+        try:
+            response = yield mark(
+                send_device_message, delay, device, message=message)
+            print(f'Device responded with {response}')
+        except KivyEventCancelled:
+            print('Event canceled')
+
+then if we do:
+
+.. code-block:: python
+
+    >>> dev = MyDevice()
+    >>> event = kivy_send_message(3, dev, 'hello')
+    >>> # a little later in kivy
+    >>> event.cancel()
+
+this will print ``Event canceled``.
 
 Threading
 ---------
 
-A :func:`kivy_run_in_async` decorated function is only safe to be called from
-the kivy thread, and only if the :mod:`kivy_trio.context` was properly
-initialized. The coroutine will be executed in the trio context that it was
-initialized to.
+A :func:`kivy_run_in_async` and :func:`kivy_run_in_async_quiet` decorated
+function is only safe to be called from the kivy thread, and generally only if
+the :mod:`kivy_trio.context` was properly initialized (if kivy and trio share
+the same thread, initialization is not stricly nessecary, but it does increase
+performance considerably). The coroutine will be executed in the trio context
+that it was initialized to, which can be the same or another thread.
 
-But the context can be initialized to a trio event loop running in the
-same or in a different thread than kivy with identical behavior for
-:func:`kivy_run_in_async`.
+See the :mod:`kivy_trio.context` for details.
 """
 import trio
 from trio.lowlevel import current_trio_token
@@ -130,6 +222,8 @@ def mark(
 
     E.g. in the code below, :func:`mark` collects the function, positional, and
     keyword arguments and yields it to be called and awaited by trio:
+
+    .. code-block:: python
 
         async def call_server(name, ip, port):
             if name == "Unknown":
