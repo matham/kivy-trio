@@ -409,6 +409,12 @@ def async_run_in_kivy(func=None, clock=None):
             token.run_sync_soon(
                 _report_kivy_back_in_trio_thread_fn, task_container, task)
 
+        if not clock.has_started:
+            raise EventLoopStoppedError(
+                f'async_run_in_kivy failed to complete <{func}> because the '
+                f'Kivy clock has not started to run yet. Consider using a '
+                f'trio.Event() to wait until Kivy has started')
+
         trigger = clock.create_lifecycle_aware_trigger(
             kivy_thread_callback, kivy_thread_callback_stopped,
             release_ref=False)
@@ -721,6 +727,12 @@ class AsyncKivyEventQueue:
 
     def _start_data_stream(self):
         clock: ClockBase = kivy_clock.get(Clock)
+
+        if not clock.has_started:
+            raise EventLoopStoppedError(
+                f'async_run_in_kivy failed to complete <{self}> because the '
+                f'Kivy clock has not started to run yet. Consider using a '
+                f'trio.Event() to wait until Kivy has started')
 
         event = self._eof_event = clock.create_lifecycle_aware_trigger(
             _do_nothing, self._clock_ended_callback, timeout=math.inf,
