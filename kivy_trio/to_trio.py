@@ -492,8 +492,11 @@ in kivy thread
             if not suppress_cancel:
                 raise
         finally:
-            # can't cancel again
-            self._gen = None
+            try:
+                self._gen.close()
+            finally:
+                # can't cancel again
+                self._gen = None
 
     def _spawn_task(self, ret_func):
         try:
@@ -523,7 +526,10 @@ in kivy thread
         finally:
             self._clock_event.cancel()
             self._clock_event = None
-            self._gen = None
+            try:
+                self._gen.close()
+            finally:
+                self._gen = None
 
     async def _async_callback(self, ret_func, ret_args=(), ret_kwargs=None):
         # check if canceled
