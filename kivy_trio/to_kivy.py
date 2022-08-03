@@ -1,5 +1,8 @@
-"""Executing synchronous code in Kivy from trio
-===============================================
+"""Calling into Kivy
+====================
+
+Executing sync functions in Kivy from Trio
+------------------------------------------
 
 Kivy is a GUI framework that runs an event loop that calls functions
 synchronously upon interactions with the GUI. Some applications also run a

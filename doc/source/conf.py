@@ -32,7 +32,9 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
     'sphinx.ext.intersphinx',
-    "sphinx_rtd_theme",
+    'sphinx_rtd_theme',
+    'sphinx_autodoc_typehints',
+    'sphinxcontrib_trio',
 ]
 
 intersphinx_mapping = {

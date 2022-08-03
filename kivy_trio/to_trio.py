@@ -1,5 +1,8 @@
-"""Executing async coroutines in Trio from Kivy
-===============================================
+"""Calling into Trio
+====================
+
+Executing async coroutines in Trio from Kivy
+--------------------------------------------
 
 Kivy is a GUI framework that runs an event loop that calls functions
 synchronously upon interactions with the GUI. Some applications also run a
