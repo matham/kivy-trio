@@ -549,8 +549,6 @@ class AsyncKivyEventQueue:
 
     _trio_token: Optional[TrioToken] = None
 
-    _trio_thread_token: Optional[TrioToken] = None
-
     def __init__(
             self, filter: Optional[Callable[..., bool]] = None,
             convert: Optional[Callable] = None, max_len: Optional[int] = None,
@@ -567,8 +565,6 @@ class AsyncKivyEventQueue:
 
         try:
             entry_token = trio_entry.get(None)
-            # trio_thread defaults to None
-            thread_token = trio_thread.get()
             if entry_token is None:
                 entry_token = current_trio_token()
         except RuntimeError as e:
@@ -582,7 +578,6 @@ class AsyncKivyEventQueue:
                 "loop token?") from e
 
         self._trio_token = entry_token
-        self._trio_thread_token = thread_token
         self._queue = deque(maxlen=self._max_len)
         self._send_channel, self._receive_channel = trio.open_memory_channel(1)
         self._eof_trio_event = trio.Event()
@@ -609,7 +604,6 @@ class AsyncKivyEventQueue:
         self._queue = None  # this lets us detect if stop raised an error
         self._eof_trio_event = None
         self._trio_token = None
-        self._trio_thread_token = None
 
     def __aiter__(self):
         return self
@@ -641,7 +635,7 @@ class AsyncKivyEventQueue:
         self._quit = True
 
         entry_token = self._trio_token
-        if self._trio_thread_token is entry_token:
+        if trio_thread.get() is entry_token:
             # same thread
             self._send_on_channel()
         else:
@@ -685,7 +679,7 @@ class AsyncKivyEventQueue:
         queue.append(args)
 
         entry_token = self._trio_token
-        if self._trio_thread_token is entry_token:
+        if trio_thread.get() is entry_token:
             # same thread
             self._send_on_channel()
         else:
@@ -718,7 +712,7 @@ class AsyncKivyEventQueue:
             return
 
         entry_token = self._trio_token
-        if self._trio_thread_token is entry_token:
+        if trio_thread.get() is entry_token:
             # same thread
             event.set()
         else:

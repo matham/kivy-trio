@@ -10,8 +10,8 @@ from kivy.properties import NumericProperty, StringProperty, BooleanProperty
 from kivy_trio.to_kivy import async_run_in_kivy, EventLoopStoppedError, \
     AsyncKivyBind
 from kivy_trio.to_trio import kivy_run_in_async, mark, KivyEventCancelled
-from kivy_trio.context import kivy_trio_context_manager, \
-    trio_context_manager, initialize_kivy_from_trio
+from kivy_trio.context import shared_thread_context, \
+    trio_thread_context, initialize_from_trio
 
 kv = '''
 BoxLayout:
@@ -129,8 +129,8 @@ class DemoApp(App):
 
     def _trio_thread_target(self):
         async def runner():
-            with trio_context_manager():
-                await initialize_kivy_from_trio()
+            with trio_thread_context():
+                await initialize_from_trio()
                 async with trio.open_nursery() as nursery:
                     nursery.start_soon(self.send_msg_to_kivy_from_trio)
                     nursery.start_soon(self.track_press_button)
@@ -147,7 +147,7 @@ class DemoApp(App):
         thread.join()
 
     async def run_app(self):
-        with kivy_trio_context_manager():
+        with shared_thread_context():
             async with trio.open_nursery() as nursery:
                 nursery.start_soon(self.async_run, 'trio')
                 nursery.start_soon(self.send_msg_to_kivy_from_trio)
@@ -155,5 +155,5 @@ class DemoApp(App):
 
 
 if __name__ == '__main__':
-    trio.run(DemoApp().run_app)
-    # DemoApp().run_threading()
+    # trio.run(DemoApp().run_app)
+    DemoApp().run_threading()

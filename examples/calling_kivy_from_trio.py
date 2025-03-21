@@ -6,7 +6,7 @@ from kivy.lang import Builder
 from kivy.properties import StringProperty
 
 from kivy_trio.to_kivy import async_run_in_kivy, EventLoopStoppedError
-from kivy_trio.context import kivy_trio_context_manager
+from kivy_trio.context import shared_thread_context
 
 kv = '''
 Label:
@@ -38,7 +38,7 @@ class DemoApp(App):
             await trio.sleep(1 + random.random())
 
     async def run_app(self):
-        with kivy_trio_context_manager():
+        with shared_thread_context():
             async with trio.open_nursery() as nursery:
                 nursery.start_soon(self.async_run, 'trio')
                 nursery.start_soon(self.send_msg_to_kivy_from_trio)

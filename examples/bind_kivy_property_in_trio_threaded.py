@@ -7,8 +7,8 @@ from kivy.clock import Clock
 from kivy.properties import BooleanProperty
 
 from kivy_trio.to_kivy import async_run_in_kivy, AsyncKivyBind
-from kivy_trio.context import trio_context_manager, \
-    initialize_kivy_from_trio
+from kivy_trio.context import trio_thread_context, \
+    initialize_from_trio
 
 kv = '''
 BoxLayout:
@@ -43,8 +43,8 @@ class DemoApp(App):
 
     def _trio_thread_target(self):
         async def runner():
-            with trio_context_manager():
-                await initialize_kivy_from_trio()
+            with trio_thread_context():
+                await initialize_from_trio()
                 await self.track_press_button()
 
         trio.run(runner)

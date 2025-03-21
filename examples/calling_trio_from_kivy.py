@@ -6,7 +6,7 @@ from kivy.lang import Builder
 from kivy.properties import NumericProperty, StringProperty
 
 from kivy_trio.to_trio import kivy_run_in_async, mark, KivyEventCancelled
-from kivy_trio.context import kivy_trio_context_manager
+from kivy_trio.context import shared_thread_context
 
 kv = '''
 BoxLayout:
@@ -79,7 +79,7 @@ class DemoApp(App):
             print('cancelled trigger_async_error while it was waiting')
 
     async def run_app(self):
-        with kivy_trio_context_manager():
+        with shared_thread_context():
             await self.async_run('trio')
 
 

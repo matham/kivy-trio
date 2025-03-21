@@ -5,7 +5,7 @@ from kivy.lang import Builder
 from kivy.properties import BooleanProperty
 
 from kivy_trio.to_kivy import async_run_in_kivy, AsyncKivyBind
-from kivy_trio.context import kivy_trio_context_manager
+from kivy_trio.context import shared_thread_context
 
 kv = '''
 BoxLayout:
@@ -42,7 +42,7 @@ class DemoApp(App):
                 await self.set_button_state(value[1])
 
     async def run_app(self):
-        with kivy_trio_context_manager():
+        with shared_thread_context():
             async with trio.open_nursery() as nursery:
                 nursery.start_soon(self.async_run, 'trio')
                 nursery.start_soon(self.track_press_button)
