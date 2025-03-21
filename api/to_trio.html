@@ -1,0 +1,656 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calling into Trio &mdash; kivy-trio  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="Calling into Kivy" href="to_kivy.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            kivy-trio
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="api.html">kivy-trio API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="context.html">Context Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.ContextVarContextManager"><code class="docutils literal notranslate"><span class="pre">ContextVarContextManager</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.initialize_from_trio"><code class="docutils literal notranslate"><span class="pre">initialize_from_trio()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.initialize_kivy_thread"><code class="docutils literal notranslate"><span class="pre">initialize_kivy_thread()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.initialize_shared_thread"><code class="docutils literal notranslate"><span class="pre">initialize_shared_thread()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.initialize_trio_thread"><code class="docutils literal notranslate"><span class="pre">initialize_trio_thread()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.kivy_clock"><code class="docutils literal notranslate"><span class="pre">kivy_clock</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.kivy_thread"><code class="docutils literal notranslate"><span class="pre">kivy_thread</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.kivy_thread_context"><code class="docutils literal notranslate"><span class="pre">kivy_thread_context()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.shared_thread_context"><code class="docutils literal notranslate"><span class="pre">shared_thread_context()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.trio_entry"><code class="docutils literal notranslate"><span class="pre">trio_entry</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.trio_thread"><code class="docutils literal notranslate"><span class="pre">trio_thread</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="context.html#kivy_trio.context.trio_thread_context"><code class="docutils literal notranslate"><span class="pre">trio_thread_context()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="to_kivy.html">Calling into Kivy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="to_kivy.html#kivy_trio.to_kivy.AsyncKivyBind"><code class="docutils literal notranslate"><span class="pre">AsyncKivyBind</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="to_kivy.html#kivy_trio.to_kivy.AsyncKivyEventQueue"><code class="docutils literal notranslate"><span class="pre">AsyncKivyEventQueue</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="to_kivy.html#kivy_trio.to_kivy.EventLoopStoppedError"><code class="docutils literal notranslate"><span class="pre">EventLoopStoppedError</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="to_kivy.html#kivy_trio.to_kivy.async_run_in_kivy"><code class="docutils literal notranslate"><span class="pre">async_run_in_kivy()</span></code></a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Calling into Trio</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#executing-async-coroutines-in-trio-from-kivy">Executing async coroutines in Trio from Kivy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#exceptions">Exceptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lifecycle-and-cancellation">Lifecycle and Cancellation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#threading">Threading</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent"><code class="docutils literal notranslate"><span class="pre">KivyCallbackEvent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent.cancel"><code class="docutils literal notranslate"><span class="pre">KivyCallbackEvent.cancel()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#kivy_trio.to_trio.KivyEventCancelled"><code class="docutils literal notranslate"><span class="pre">KivyEventCancelled</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async"><code class="docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async_quiet"><code class="docutils literal notranslate"><span class="pre">kivy_run_in_async_quiet()</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#kivy_trio.to_trio.mark"><code class="docutils literal notranslate"><span class="pre">mark()</span></code></a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">kivy-trio</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="api.html">kivy-trio API</a></li>
+      <li class="breadcrumb-item active">Calling into Trio</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api/to_trio.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="calling-into-trio">
+<span id="module-kivy_trio.to_trio"></span><h1>Calling into Trio<a class="headerlink" href="#calling-into-trio" title="Link to this heading"></a></h1>
+<section id="executing-async-coroutines-in-trio-from-kivy">
+<h2>Executing async coroutines in Trio from Kivy<a class="headerlink" href="#executing-async-coroutines-in-trio-from-kivy" title="Link to this heading"></a></h2>
+<p>Kivy is a GUI framework that runs an event loop that calls functions
+synchronously upon interactions with the GUI. Some applications also run a
+Trio eventloop executing async code in the Kivy thread (when kivy is run
+asynchronously) or in a separate thread. This package enables Kivy to execute
+an async coroutine in the trio context.</p>
+<p>E.g. after the trio and kivy <a class="reference internal" href="context.html#module-kivy_trio.context" title="kivy_trio.context"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kivy_trio.context</span></code></a> is initialized, the
+following async function that sends a message to a device:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@kivy_run_in_async_quiet</span>
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">send_device_message</span><span class="p">(</span><span class="n">delay</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">delay</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">device</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>can be scheduled to run in Trio from within a kivy context simply by calling it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dev</span> <span class="o">=</span> <span class="n">MyDevice</span><span class="p">()</span>
+<span class="n">send_device_message</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">dev</span><span class="p">,</span> <span class="s1">&#39;hello&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This uses the <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async_quiet" title="kivy_trio.to_trio.kivy_run_in_async_quiet"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async_quiet()</span></code></a> to automatically schedule the
+async function to run in the trio context by wrapping it in a synchronous
+decorator. Then, when <code class="docutils literal notranslate"><span class="pre">send_device_message</span></code> is called by Kivy, Kivy doesn’t
+block waiting for the function to finish.</p>
+<p><a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async_quiet" title="kivy_trio.to_trio.kivy_run_in_async_quiet"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async_quiet()</span></code></a> can only be used for async functions or methods
+that cannot raise an exception and when we don’t need a return value. Using it
+on functions that can raise an exception is unsafe as it will crash the program.</p>
+<p>Instead, <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a> can be used for general functions and methods
+as in the following modified async function example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">send_device_message</span><span class="p">(</span><span class="n">delay</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">delay</span><span class="p">)</span>
+    <span class="k">return</span> <span class="k">await</span> <span class="n">device</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Now, we also need to define a synchronous wrapper function that handles the
+return value and potential exceptions as follows:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@kivy_run_in_async</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kivy_send_message</span><span class="p">(</span><span class="n">delay</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span>
+            <span class="n">send_device_message</span><span class="p">,</span> <span class="n">delay</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Device responded with </span><span class="si">{</span><span class="n">response</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Device failed with error </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This is similarly scheduled to run in a trio context from within a kivy context
+by calling it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">dev</span> <span class="o">=</span> <span class="n">MyDevice</span><span class="p">()</span>
+<span class="n">kivy_send_message</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">dev</span><span class="p">,</span> <span class="s1">&#39;hello&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a> performs the following actions when called as
+<code class="docutils literal notranslate"><span class="pre">event</span> <span class="pre">=</span> <span class="pre">kivy_send_message(...)</span></code> in three phases.</p>
+<ol class="arabic simple">
+<li><p>First <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a> instantiates the underlying
+<code class="docutils literal notranslate"><span class="pre">kivy_send_message</span></code> generator to get the yielded value. This advances
+<code class="docutils literal notranslate"><span class="pre">kivy_send_message</span></code> internally to the <code class="docutils literal notranslate"><span class="pre">yield</span></code> point. The value the
+wrapper function must yield to the decorator is a <a class="reference internal" href="#kivy_trio.to_trio.mark" title="kivy_trio.to_trio.mark"><code class="xref py py-func docutils literal notranslate"><span class="pre">mark()</span></code></a>-ed up async
+function and the positional/keyword arguments that will be passed to it.</p></li>
+<li><p>Next, the <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a> decorator immediately schedules the
+marked async function to be called in Trio, with the wrapper suspended at
+the <code class="docutils literal notranslate"><span class="pre">yield</span></code> point.</p></li>
+<li><p>Finally, when the async function has finished or raised an exception in Trio,
+using the kivy clock the generator is resumed from the <code class="docutils literal notranslate"><span class="pre">yield</span></code> point
+by the decorator. It then finishes executing the wrapper function by yielding
+the return value of the wrapped async function or re-raises its exception.</p></li>
+</ol>
+<p>Consequently, the marked async function is executed in Trio, but the return
+value is then passed back or any exception the async function has raised is
+similarly re-raised in the kivy context when the generator resumes.</p>
+</section>
+<section id="exceptions">
+<h2>Exceptions<a class="headerlink" href="#exceptions" title="Link to this heading"></a></h2>
+<p>If the async coroutine raises an exception, the exception will be caught and
+sent to resume the wrapper generator at the <code class="docutils literal notranslate"><span class="pre">yield</span></code> statement so the wrapper
+will raise that exception and be given an opportunity to handle it. So e.g.:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">raise_error</span><span class="p">():</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Goodbye&#39;</span><span class="p">)</span>
+
+<span class="nd">@kivy_run_in_async</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kivy_send_message</span><span class="p">():</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span><span class="n">raise_error</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Error caught </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>when <code class="docutils literal notranslate"><span class="pre">kivy_send_message</span></code> is called, it’ll catch the exception raised in trio
+and print <code class="docutils literal notranslate"><span class="pre">'Error</span> <span class="pre">caught</span> <span class="pre">Goodbye'</span></code>. If the exception is not caught, then it’ll
+crash Kivy because it’s the Kivy Clock that is actually executing it.</p>
+<p>If <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async_quiet" title="kivy_trio.to_trio.kivy_run_in_async_quiet"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async_quiet()</span></code></a> was used instead to decorate <code class="docutils literal notranslate"><span class="pre">raise_error</span></code>
+directly, the Kivy event loop will crash, so it is only to be used for
+functions that can’t raise exceptions.</p>
+</section>
+<section id="lifecycle-and-cancellation">
+<h2>Lifecycle and Cancellation<a class="headerlink" href="#lifecycle-and-cancellation" title="Link to this heading"></a></h2>
+<p>A <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a> and <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async_quiet" title="kivy_trio.to_trio.kivy_run_in_async_quiet"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async_quiet()</span></code></a> decorated
+function or method may only be called while the Kivy event loop and trio event
+loop are running. Otherwise, an exception may be raised when the function is
+called.</p>
+<p>If the kivy event loop ends while the coroutine is executing in trio, such as
+when the Kivy GUI exits, the event will be canceled and a
+<a class="reference internal" href="#kivy_trio.to_trio.KivyEventCancelled" title="kivy_trio.to_trio.KivyEventCancelled"><code class="xref py py-class docutils literal notranslate"><span class="pre">KivyEventCancelled</span></code></a> exception will be injected
+into the wrapper generator. The coroutine will still finish executing in trio
+and there’s currently no way to cancel that once it started, but the result
+will be discarded when it’s done.</p>
+<p>A waiting event may be explicitly canceled with
+<a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent.cancel" title="kivy_trio.to_trio.KivyCallbackEvent.cancel"><code class="xref py py-meth docutils literal notranslate"><span class="pre">KivyCallbackEvent.cancel()</span></code></a>. As above a <a class="reference internal" href="#kivy_trio.to_trio.KivyEventCancelled" title="kivy_trio.to_trio.KivyEventCancelled"><code class="xref py py-class docutils literal notranslate"><span class="pre">KivyEventCancelled</span></code></a>
+exception will be injected into the generator and the coroutine will still
+finish executing in trio, but its result will be discarded.</p>
+<p>E.g. given the following functions:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">send_device_message</span><span class="p">(</span><span class="n">delay</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">delay</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">device</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">result</span>
+
+<span class="nd">@kivy_run_in_async</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kivy_send_message</span><span class="p">(</span><span class="n">delay</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span>
+            <span class="n">send_device_message</span><span class="p">,</span> <span class="n">delay</span><span class="p">,</span> <span class="n">device</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Device responded with </span><span class="si">{</span><span class="n">response</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">KivyEventCancelled</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Event canceled&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>then if we do:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">dev</span> <span class="o">=</span> <span class="n">MyDevice</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">event</span> <span class="o">=</span> <span class="n">kivy_send_message</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">dev</span><span class="p">,</span> <span class="s1">&#39;hello&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># a little later in kivy</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">event</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>this will print <code class="docutils literal notranslate"><span class="pre">Event</span> <span class="pre">canceled</span></code>.</p>
+</section>
+<section id="threading">
+<h2>Threading<a class="headerlink" href="#threading" title="Link to this heading"></a></h2>
+<p>A <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a> and <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async_quiet" title="kivy_trio.to_trio.kivy_run_in_async_quiet"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async_quiet()</span></code></a> decorated
+function is only safe to be called from the kivy thread, and generally only if
+the <a class="reference internal" href="context.html#module-kivy_trio.context" title="kivy_trio.context"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kivy_trio.context</span></code></a> was properly initialized (if kivy and trio share
+the same thread, initialization is not stricly nessecary, but it does increase
+performance considerably). The coroutine will be executed in the trio context
+that it was initialized to, which can be the same or another thread.</p>
+<p>See the <a class="reference internal" href="context.html#module-kivy_trio.context" title="kivy_trio.context"><code class="xref py py-mod docutils literal notranslate"><span class="pre">kivy_trio.context</span></code></a> for details.</p>
+</section>
+</section>
+<dl class="py class">
+<dt class="sig sig-object py" id="kivy_trio.to_trio.KivyCallbackEvent">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">kivy_trio.to_trio.</span></span><span class="sig-name descname"><span class="pre">KivyCallbackEvent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">clock</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gen</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ret_func</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#kivy_trio.to_trio.KivyCallbackEvent" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/functions.html#object" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></a></p>
+<p>The event class returned when a <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a> or
+<a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async_quiet" title="kivy_trio.to_trio.kivy_run_in_async_quiet"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async_quiet()</span></code></a> decorated function is called.
+It represents the async code scheduled to be called by trio.</p>
+<p>This class should not be instantiated manually in user code.</p>
+<p>E.g. the following code prints the event as it’s scheduled:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">trio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.app</span><span class="w"> </span><span class="kn">import</span> <span class="n">App</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">Builder</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.to_trio</span><span class="w"> </span><span class="kn">import</span> <span class="n">kivy_run_in_async_quiet</span><span class="p">,</span> <span class="n">kivy_run_in_async</span><span class="p">,</span> <span class="n">mark</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">initialize_shared_thread</span>
+
+<span class="n">kv</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">BoxLayout:</span>
+<span class="s2">    Button:</span>
+<span class="s2">        text: &quot;Simple async&quot;</span>
+<span class="s2">        on_release: print(f&#39;Event: {app.do_something_simple_async()}&#39;)</span>
+<span class="s2">    Button:</span>
+<span class="s2">        text: &quot;async with error checking&quot;</span>
+<span class="s2">        on_release: print(f&#39;Event: {app.call_async()}&#39;)</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">DemoApp</span><span class="p">(</span><span class="n">App</span><span class="p">):</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Builder</span><span class="o">.</span><span class="n">load_string</span><span class="p">(</span><span class="n">kv</span><span class="p">)</span>
+
+    <span class="nd">@kivy_run_in_async_quiet</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">do_something_simple_async</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">.1</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Slept&#39;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">do_async</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Slept&#39;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Woke up&#39;</span><span class="p">)</span>
+
+    <span class="nd">@kivy_run_in_async</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">call_async</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">do_async</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Got error &quot;</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s1">&quot;&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">initialize_shared_thread</span><span class="p">()</span>
+
+<span class="n">trio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">DemoApp</span><span class="p">()</span><span class="o">.</span><span class="n">async_run</span><span class="p">,</span> <span class="s1">&#39;trio&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="kivy_trio.to_trio.KivyCallbackEvent.cancel">
+<span class="sig-name descname"><span class="pre">cancel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#kivy_trio.to_trio.KivyCallbackEvent.cancel" title="Link to this definition"></a></dt>
+<dd><p>Cancels the waiting event from reporting back to the kivy thread.</p>
+<p>The async code itself is immediately scheduled to be executed from the
+async context so that can’t be canceled once started and it will finish
+executing unless that is manually canceled using trio’s mechanisms.
+However, <a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent.cancel" title="kivy_trio.to_trio.KivyCallbackEvent.cancel"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cancel()</span></code></a> allows canceling the generator if
+<a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a> was used. Meaning, canceling will inject a
+<a class="reference internal" href="#kivy_trio.to_trio.KivyEventCancelled" title="kivy_trio.to_trio.KivyEventCancelled"><code class="xref py py-class docutils literal notranslate"><span class="pre">KivyEventCancelled</span></code></a> exception into the waiting generator.
+If the async code hasn’t started executing then it will also be
+canceled. However, we don’t provide visibility to the user whether the
+async code has started.</p>
+<p>The injected <a class="reference internal" href="#kivy_trio.to_trio.KivyEventCancelled" title="kivy_trio.to_trio.KivyEventCancelled"><code class="xref py py-class docutils literal notranslate"><span class="pre">KivyEventCancelled</span></code></a> will be caught by cancel so
+that the exception will not be propagated beyond <a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent.cancel" title="kivy_trio.to_trio.KivyCallbackEvent.cancel"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cancel()</span></code></a> and it
+won’t cause an app crash.
+:rtype: <span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></a></span></p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>This is only safe to be called from the kivy thread.</p>
+</div>
+<p>E.g. in the following code we schedule a async sleep event for 5s and
+then cancel it after 0.5s. In one button we only cancel the generator
+while the other uses a trio mechanism to also manually cancel the
+waiting trio code:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">trio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.app</span><span class="w"> </span><span class="kn">import</span> <span class="n">App</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">Builder</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.clock</span><span class="w"> </span><span class="kn">import</span> <span class="n">Clock</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.to_trio</span><span class="w"> </span><span class="kn">import</span> <span class="n">kivy_run_in_async</span><span class="p">,</span> <span class="n">mark</span><span class="p">,</span> <span class="n">KivyEventCancelled</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">initialize_shared_thread</span>
+
+<span class="n">kv</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">BoxLayout:</span>
+<span class="s2">    Button:</span>
+<span class="s2">        text: &quot;async without full cancel&quot;</span>
+<span class="s2">        on_release: app.start_and_cancel_async(False)</span>
+<span class="s2">    Button:</span>
+<span class="s2">        text: &quot;async with full cancel&quot;</span>
+<span class="s2">        on_release: app.start_and_cancel_async(True)</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">DemoApp</span><span class="p">(</span><span class="n">App</span><span class="p">):</span>
+
+    <span class="c1"># scope we use to manually cancel async code from trio</span>
+    <span class="n">_cancel_scope</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Builder</span><span class="o">.</span><span class="n">load_string</span><span class="p">(</span><span class="n">kv</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">do_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">allow_cancel</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;starting to async sleep&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">allow_cancel</span><span class="p">:</span>
+            <span class="c1"># if we want to be able to cancel trio&#39;s code, we need</span>
+            <span class="c1"># to create a scope that can be canceled</span>
+            <span class="k">with</span> <span class="n">trio</span><span class="o">.</span><span class="n">CancelScope</span><span class="p">()</span> <span class="k">as</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cancel_scope</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+                <span class="k">except</span> <span class="n">trio</span><span class="o">.</span><span class="n">Cancelled</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Async sleeping code was canceled by trio&#39;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_cancel_scope</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Finished async sleeping&#39;</span><span class="p">)</span>
+
+    <span class="nd">@kivy_run_in_async</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">call_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">allow_cancel</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">do_async</span><span class="p">,</span> <span class="n">allow_cancel</span><span class="o">=</span><span class="n">allow_cancel</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">KivyEventCancelled</span><span class="p">:</span>
+            <span class="c1"># catch the cancellation event</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Generator waiting for async to finish was canceled&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cancel_scope</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># we can call trio&#39;s cancel because it&#39;s running in kivy thread</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cancel_scope</span><span class="o">.</span><span class="n">cancel</span><span class="p">()</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Generator finished&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">start_and_cancel_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">allow_cancel</span><span class="p">):</span>
+        <span class="n">event</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">call_async</span><span class="p">(</span><span class="n">allow_cancel</span><span class="p">)</span>
+        <span class="n">Clock</span><span class="o">.</span><span class="n">schedule_once</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">cancel</span><span class="p">,</span> <span class="mf">.5</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">initialize_shared_thread</span><span class="p">()</span>
+
+<span class="n">trio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">DemoApp</span><span class="p">()</span><span class="o">.</span><span class="n">async_run</span><span class="p">,</span> <span class="s1">&#39;trio&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="kivy_trio.to_trio.KivyEventCancelled">
+<em class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">kivy_trio.to_trio.</span></span><span class="sig-name descname"><span class="pre">KivyEventCancelled</span></span><a class="headerlink" href="#kivy_trio.to_trio.KivyEventCancelled" title="Link to this definition"></a></dt>
+<dd><p>Bases: <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#BaseException" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseException</span></code></a></p>
+<p>The exception raised in the waiting <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a>
+decorated generator if the event is canceled or if one of the event
+loops exit before doing the callback.</p>
+<p>E.g.:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@kivy_run_in_async</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">trigger_async_error</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span><span class="n">some_func</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">KivyEventCancelled</span><span class="p">:</span>
+        <span class="c1"># event was canceled while some_func was waiting to be called</span>
+        <span class="k">pass</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kivy_trio.to_trio.kivy_run_in_async">
+<span class="sig-prename descclassname"><span class="pre">kivy_trio.to_trio.</span></span><span class="sig-name descname"><span class="pre">kivy_run_in_async</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gen</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#kivy_trio.to_trio.kivy_run_in_async" title="Link to this definition"></a></dt>
+<dd><p>Decorator for a generator that yields an async coroutine. When the
+decorated generator is called in synchronous code from Kivy, it schedules
+the async coroutine in trio and returns a <a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent" title="kivy_trio.to_trio.KivyCallbackEvent"><code class="xref py py-class docutils literal notranslate"><span class="pre">KivyCallbackEvent</span></code></a>
+representing the scheduled code.</p>
+<p>If the async coroutine cannot cause an exception, you don’t need its
+return value, and we don’t care if it’s canceled with
+<a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent.cancel" title="kivy_trio.to_trio.KivyCallbackEvent.cancel"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cancel()</span></code></a> while we still wait, you can use
+<a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async_quiet" title="kivy_trio.to_trio.kivy_run_in_async_quiet"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async_quiet()</span></code></a> instead to decorate the async code directly.</p>
+<p>E.g. to execute async code in trio with passed parameters and then catch
+the exception it raises:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">trio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.app</span><span class="w"> </span><span class="kn">import</span> <span class="n">App</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">Builder</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.to_trio</span><span class="w"> </span><span class="kn">import</span> <span class="n">kivy_run_in_async</span><span class="p">,</span> <span class="n">mark</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">initialize_shared_thread</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">DemoApp</span><span class="p">(</span><span class="n">App</span><span class="p">):</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Builder</span><span class="o">.</span><span class="n">load_string</span><span class="p">(</span>
+            <span class="s2">&quot;Button:</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;    text: &#39;Press me&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;    on_release: app.call_async(5)&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">do_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Sleeping for </span><span class="si">{</span><span class="n">duration</span><span class="si">}</span><span class="s1">s&#39;</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s1">&#39;Woke up&#39;</span><span class="p">)</span>
+
+    <span class="nd">@kivy_run_in_async</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">call_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">do_async</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="n">duration</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Got exception &quot;</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s1">&quot;&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">initialize_shared_thread</span><span class="p">()</span>
+
+<span class="n">trio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">DemoApp</span><span class="p">()</span><span class="o">.</span><span class="n">async_run</span><span class="p">,</span> <span class="s1">&#39;trio&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>When run and pressing a button and waiting, this prints:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Sleeping</span> <span class="k">for</span> <span class="mi">5</span><span class="n">s</span>
+<span class="n">Got</span> <span class="n">exception</span> <span class="s2">&quot;Woke up&quot;</span>
+</pre></div>
+</div>
+<p>Similarly, by changing <code class="docutils literal notranslate"><span class="pre">do_async</span></code> and <code class="docutils literal notranslate"><span class="pre">call_async</span></code> to the following:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">do_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Sleeping for </span><span class="si">{</span><span class="n">duration</span><span class="si">}</span><span class="s1">s&#39;</span><span class="p">)</span>
+    <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">duration</span>
+
+<span class="nd">@kivy_run_in_async</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">call_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">do_async</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="n">duration</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Slept for </span><span class="si">{</span><span class="n">result</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>the async code won’t raise an exception and instead returns the slept time
+to the generator and when run it prints:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Sleeping</span> <span class="k">for</span> <span class="mi">5</span><span class="n">s</span>
+<span class="n">Slept</span> <span class="k">for</span> <span class="mi">5</span>
+</pre></div>
+</div>
+<p>The generator can also catch exceptions due to the user canceling the event
+with <a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent.cancel" title="kivy_trio.to_trio.KivyCallbackEvent.cancel"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cancel()</span></code></a> (see that method for details)
+or if the Kivy event loop closes before the async code is done.</p>
+<p>The following example demonstrates the cancellation that automatically
+happens when Kivy ends while the async code is still waiting. Run the code,
+press the button and then exit the window while it’s sleeping:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">trio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.app</span><span class="w"> </span><span class="kn">import</span> <span class="n">App</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">Builder</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.to_trio</span><span class="w"> </span><span class="kn">import</span> <span class="n">kivy_run_in_async</span><span class="p">,</span> <span class="n">mark</span><span class="p">,</span> <span class="n">KivyEventCancelled</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">initialize_shared_thread</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">DemoApp</span><span class="p">(</span><span class="n">App</span><span class="p">):</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Builder</span><span class="o">.</span><span class="n">load_string</span><span class="p">(</span>
+            <span class="s2">&quot;Button:</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;    text: &#39;Press me&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;    on_release: app.call_async(5)&quot;</span><span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">do_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Sleeping for </span><span class="si">{</span><span class="n">duration</span><span class="si">}</span><span class="s1">s&#39;</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+
+    <span class="nd">@kivy_run_in_async</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">call_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">do_async</span><span class="p">,</span> <span class="n">duration</span><span class="o">=</span><span class="n">duration</span><span class="p">)</span>
+        <span class="k">except</span> <span class="n">KivyEventCancelled</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Got canceled exception &quot;</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s1">&quot;&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">initialize_shared_thread</span><span class="p">()</span>
+
+<span class="n">trio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">DemoApp</span><span class="p">()</span><span class="o">.</span><span class="n">async_run</span><span class="p">,</span> <span class="s1">&#39;trio&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>When run like that it should print:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Sleeping</span> <span class="k">for</span> <span class="mi">5</span><span class="n">s</span>
+<span class="n">Got</span> <span class="n">canceled</span> <span class="n">exception</span> <span class="s2">&quot;Event was canceled&quot;</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Callable</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/constants.html#Ellipsis" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">...</span></code></a>, <a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent" title="kivy_trio.to_trio.KivyCallbackEvent"><code class="xref py py-class docutils literal notranslate"><span class="pre">KivyCallbackEvent</span></code></a>]</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kivy_trio.to_trio.kivy_run_in_async_quiet">
+<span class="sig-prename descclassname"><span class="pre">kivy_trio.to_trio.</span></span><span class="sig-name descname"><span class="pre">kivy_run_in_async_quiet</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">async_func</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#kivy_trio.to_trio.kivy_run_in_async_quiet" title="Link to this definition"></a></dt>
+<dd><p>Decorator for an async coroutine that schedules the async coroutine in
+trio and returns a <a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent" title="kivy_trio.to_trio.KivyCallbackEvent"><code class="xref py py-class docutils literal notranslate"><span class="pre">KivyCallbackEvent</span></code></a> representing the scheduled
+code.</p>
+<p>It’s similar to <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a>, however unlike that function
+that can catch exceptions and the async coroutine’s return value, this will
+only execute the async coroutine without any protection or return value.</p>
+<p><a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async_quiet" title="kivy_trio.to_trio.kivy_run_in_async_quiet"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async_quiet()</span></code></a> should only be used if the async coroutine
+cannot cause an exception (as it can’t be caught and will crash the
+program), you don’t need its return value, and we don’t care if it’s
+canceled with <a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent.cancel" title="kivy_trio.to_trio.KivyCallbackEvent.cancel"><code class="xref py py-meth docutils literal notranslate"><span class="pre">cancel()</span></code></a> while we still wait
+(because you won’t know) and Kivy won’t be stopped while we wait (that will
+raise a <a class="reference internal" href="#kivy_trio.to_trio.KivyEventCancelled" title="kivy_trio.to_trio.KivyEventCancelled"><code class="xref py py-class docutils literal notranslate"><span class="pre">KivyEventCancelled</span></code></a> in Kivy as it exits).</p>
+<p>E.g.:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">trio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.app</span><span class="w"> </span><span class="kn">import</span> <span class="n">App</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">Builder</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.to_trio</span><span class="w"> </span><span class="kn">import</span> <span class="n">kivy_run_in_async_quiet</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">kivy_trio.context</span><span class="w"> </span><span class="kn">import</span> <span class="n">initialize_shared_thread</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">DemoApp</span><span class="p">(</span><span class="n">App</span><span class="p">):</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">Builder</span><span class="o">.</span><span class="n">load_string</span><span class="p">(</span>
+            <span class="s2">&quot;Button:</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;    text: &#39;Press me&#39;</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="s2">&quot;    on_release: app.call_async(5)&quot;</span><span class="p">)</span>
+
+    <span class="nd">@kivy_run_in_async_quiet</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">call_async</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">duration</span><span class="p">):</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Sleeping for </span><span class="si">{</span><span class="n">duration</span><span class="si">}</span><span class="s1">s&#39;</span><span class="p">)</span>
+        <span class="k">await</span> <span class="n">trio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">on_start</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">initialize_shared_thread</span><span class="p">()</span>
+
+<span class="n">trio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">DemoApp</span><span class="p">()</span><span class="o">.</span><span class="n">async_run</span><span class="p">,</span> <span class="s1">&#39;trio&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Callable</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/constants.html#Ellipsis" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">...</span></code></a>, <a class="reference internal" href="#kivy_trio.to_trio.KivyCallbackEvent" title="kivy_trio.to_trio.KivyCallbackEvent"><code class="xref py py-class docutils literal notranslate"><span class="pre">KivyCallbackEvent</span></code></a>]</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="kivy_trio.to_trio.mark">
+<span class="sig-prename descclassname"><span class="pre">kivy_trio.to_trio.</span></span><span class="sig-name descname"><span class="pre">mark</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">__async_func</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#kivy_trio.to_trio.mark" title="Link to this definition"></a></dt>
+<dd><p>Collects the function and its parameters in a <a class="reference internal" href="#kivy_trio.to_trio.kivy_run_in_async" title="kivy_trio.to_trio.kivy_run_in_async"><code class="xref py py-func docutils literal notranslate"><span class="pre">kivy_run_in_async()</span></code></a>
+decorated generator. The function is subsequently called and awaited by
+trio, passing in its positional and keyword arguments.</p>
+<p>E.g. in the code below, <a class="reference internal" href="#kivy_trio.to_trio.mark" title="kivy_trio.to_trio.mark"><code class="xref py py-func docutils literal notranslate"><span class="pre">mark()</span></code></a> collects the function, positional, and
+keyword arguments and yields it to be called and awaited by trio:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">call_server</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;Unknown&quot;</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span>
+
+<span class="nd">@kivy_run_in_async</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">on_button_press</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">ip</span><span class="o">=</span><span class="mf">0.0.0.0</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6768</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">yield</span> <span class="n">mark</span><span class="p">(</span><span class="n">call_server</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">ip</span><span class="o">=</span><span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+        <span class="c1"># async call_server function failed with ValueError</span>
+        <span class="k">pass</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>__async_func</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Callable</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/constants.html#Ellipsis" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">...</span></code></a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Awaitable" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Awaitable</span></code></a>]</span>) – The async function or method to call.</p></li>
+<li><p><strong>args</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a></span>) – Any positional arguments to be passed to the function.</p></li>
+<li><p><strong>kwargs</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a></span>) – Any keyword arguments to be passed to the function.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Callable</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/constants.html#Ellipsis" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">...</span></code></a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Awaitable" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Awaitable</span></code></a>], <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Tuple" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a>], <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Dict" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dict</span></code></a>[<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>, <a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></a>]]</span></p>
+</dd>
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A collection of the functions and its args to be used internally.
+The exact form is internal and is not part of the public API.</p>
+</dd>
+</dl>
+</dd></dl>
+
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="to_kivy.html" class="btn btn-neutral float-left" title="Calling into Kivy" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2020, Matthew Einhorn.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
