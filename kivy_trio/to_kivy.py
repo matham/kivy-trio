@@ -272,7 +272,8 @@ def async_run_in_kivy(func=None, clock=None):
                 return text * 2
 
             def on_start(self):
-                # notify the waiting async trio that kivy started so it can proceed
+                # notify the waiting async trio that kivy started so it can
+                # proceed
                 initialize_shared_thread()
                 self.start_event.set()
 
