@@ -102,8 +102,8 @@ When run, this printed e.g.::
 1. First it wraps and schedules the underlying ``update_text`` method to be
    called by Kivy in the Kivy thread (if they share a thread and properly
    initialized it just executes it directly skipping the remaining steps).
-2. Next, it waits for Kivy to execute the method, either saving its return value
-   or catching the exception.
+2. Next, it waits for Kivy to execute the method, either saving its return
+   value or catching the exception.
 3. Finally, when the function has finished or raised an exception, the waiting
    async line is woken up returning the return value or re-raising the
    exception.
